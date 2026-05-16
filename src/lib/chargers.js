@@ -1,5 +1,7 @@
 import { getProviderKey } from "../data/providerApps.js";
 
+const LTA_BATCH_DOWNLOAD_HOSTS = new Set(["dmprod-datasets.s3.ap-southeast-1.amazonaws.com"]);
+
 export function extractLtaBatchLink(payload) {
   if (!payload || typeof payload !== "object") return "";
   const direct = payload.Link || payload.link || payload.DownloadLink || payload.downloadLink;
@@ -151,7 +153,20 @@ function scoreRecordArray(records) {
 }
 
 function isLtaBatchDownloadLink(value) {
-  return typeof value === "string" && /^https?:\/\//i.test(value) && /\/EVBatch-/i.test(value);
+  if (typeof value !== "string") return false;
+
+  try {
+    const url = new URL(value);
+
+    return (
+      url.protocol === "https:" &&
+      LTA_BATCH_DOWNLOAD_HOSTS.has(url.hostname.toLowerCase()) &&
+      /^\/ev-batch\/\d{4}-\d{2}-\d{2}\//i.test(url.pathname) &&
+      /\/EVBatch-/i.test(url.pathname)
+    );
+  } catch {
+    return false;
+  }
 }
 
 function collectPlugTypes(record, chargingPoints) {

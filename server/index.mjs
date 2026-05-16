@@ -13,6 +13,9 @@ const host = process.env.HOST || "0.0.0.0";
 const ltaAccountKey = process.env.LTA_ACCOUNT_KEY;
 const configuredCacheTtlMs = Number(process.env.CACHE_TTL_MS || 5 * 60 * 1000);
 const cacheTtlMs = Number.isFinite(configuredCacheTtlMs) && configuredCacheTtlMs > 0 ? configuredCacheTtlMs : 5 * 60 * 1000;
+const configuredLtaFetchTimeoutMs = Number(process.env.LTA_FETCH_TIMEOUT_MS || 15000);
+const ltaFetchTimeoutMs =
+  Number.isFinite(configuredLtaFetchTimeoutMs) && configuredLtaFetchTimeoutMs > 0 ? configuredLtaFetchTimeoutMs : 15000;
 
 let liveCache = null;
 let liveRefreshPromise = null;
@@ -20,6 +23,31 @@ let sampleCache = null;
 let alignedRefreshTimer = null;
 
 const app = express();
+
+app.disable("x-powered-by");
+
+app.use((_req, res, next) => {
+  res.set({
+    "Content-Security-Policy": [
+      "default-src 'self'",
+      "script-src 'self'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https://*.tile.openstreetmap.org",
+      "connect-src 'self'",
+      "font-src 'self' data:",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+    ].join("; "),
+    "Cross-Origin-Opener-Policy": "same-origin",
+    "Permissions-Policy": "camera=(), geolocation=(self), microphone=(), payment=()",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+  });
+  next();
+});
 
 app.get("/api/health", (_req, res) => {
   res.json({
@@ -86,6 +114,7 @@ async function refreshLiveCache() {
       AccountKey: ltaAccountKey,
       accept: "application/json",
     },
+    signal: AbortSignal.timeout(ltaFetchTimeoutMs),
   });
 
   if (!metaResponse.ok) {
@@ -101,6 +130,7 @@ async function refreshLiveCache() {
 
   const batchResponse = await fetch(downloadLink, {
     headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(ltaFetchTimeoutMs),
   });
 
   if (!batchResponse.ok) {

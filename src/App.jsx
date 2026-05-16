@@ -25,7 +25,7 @@ const AREA_CENTER = { latitude: SINGAPORE_CENTER[0], longitude: SINGAPORE_CENTER
 const DEFAULT_ZOOM = 11;
 const CLIENT_REFRESH_MS = 5 * 60 * 1000;
 const SG_TIME_ZONE = "Asia/Singapore";
-const FEEDBACK_EMAIL = "celesteanglm@gmail.com";
+const FEEDBACK_EMAIL = "celeste@agents.world";
 const SHEET_DRAG_THRESHOLD_PX = 44;
 const AREA_FILTERS = [
   { id: "north", label: "North", color: "#17875a", textColor: "#ffffff" },

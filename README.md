@@ -41,9 +41,13 @@ Never put the LTA key in client-side code or a `VITE_` variable. Keep it server-
 
 ```bash
 LTA_ACCOUNT_KEY=your_lta_datamall_account_key
+CACHE_TTL_MS=300000
+LTA_FETCH_TIMEOUT_MS=15000
 ```
 
 The key is read by [server/index.mjs](server/index.mjs) and sent to LTA using the `AccountKey` request header.
+The server also restricts LTA batch downloads to the current DataMall S3 host and applies a fetch timeout so public
+requests cannot leave backend fetches hanging indefinitely.
 
 ## Run Locally
 
@@ -104,6 +108,7 @@ In the Railway service Variables tab, set:
 ```bash
 LTA_ACCOUNT_KEY=your_lta_datamall_account_key
 CACHE_TTL_MS=300000
+LTA_FETCH_TIMEOUT_MS=15000
 NODE_ENV=production
 ```
 
