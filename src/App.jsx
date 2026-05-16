@@ -340,10 +340,16 @@ function StationDetail({ station, onOpenApp }) {
       </div>
 
       <div className="detail-actions">
-        <button className="primary-action" type="button" onClick={() => openDirections(station)}>
+        <a
+          className="primary-action"
+          href={getGoogleMapsUrl(station)}
+          target="_blank"
+          rel="noreferrer"
+          aria-label={`Open ${station.name} in Google Maps`}
+        >
           <Navigation size={18} />
           Open in Google Maps
-        </button>
+        </a>
 
         <button className="secondary-action" type="button" onClick={onOpenApp}>
           <ExternalLink size={18} />
@@ -416,10 +422,8 @@ function createUserIcon() {
   });
 }
 
-function openDirections(station) {
+function getGoogleMapsUrl(station) {
   const destination = encodeURIComponent(`${station.latitude},${station.longitude}`);
   const destinationName = encodeURIComponent(station.name || station.address || "EV charger");
-  const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving&dir_action=navigate&destination_name=${destinationName}`;
-
-  window.open(url, "_blank", "noopener,noreferrer");
+  return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving&dir_action=navigate&destination_name=${destinationName}`;
 }
