@@ -4,6 +4,7 @@ import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import {
   ArrowLeft,
   BatteryCharging,
+  ChevronsUp,
   CircleDot,
   Clock,
   ExternalLink,
@@ -28,6 +29,7 @@ const CLIENT_REFRESH_MS = 5 * 60 * 1000;
 const SG_TIME_ZONE = "Asia/Singapore";
 const FEEDBACK_EMAIL = "celeste@agents.world";
 const SHEET_DRAG_THRESHOLD_PX = 44;
+const MOBILE_SHEET_QUERY = "(max-width: 860px)";
 const RESULT_PAGE_SIZE = 10;
 const AREA_FILTERS = [
   { id: "north", label: "North", color: "#17875a", textColor: "#ffffff" },
@@ -97,9 +99,10 @@ function ChargerMapPage({ onNavigate }) {
   const [mapCenter, setMapCenter] = useState(SINGAPORE_CENTER);
   const [visibleResultCount, setVisibleResultCount] = useState(RESULT_PAGE_SIZE);
   const [locationNotice, setLocationNotice] = useState("");
-  const [sheetMode, setSheetMode] = useState("expanded");
+  const [sheetMode, setSheetMode] = useState(getInitialSheetMode);
+  const [sheetHasUserInteracted, setSheetHasUserInteracted] = useState(false);
   const mapRef = useRef(null);
-  const sheetTouchStartY = useRef(null);
+  const sheetDragStartY = useRef(null);
   const sheetDidDrag = useRef(false);
   const areaFilters = useMemo(() => buildAreaFilterOptions(stations), [stations]);
   const operatorFilters = useMemo(() => buildOperatorFilterOptions(stations), [stations]);
@@ -181,6 +184,23 @@ function ChargerMapPage({ onNavigate }) {
       if (refreshTimer) window.clearTimeout(refreshTimer);
     };
   }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia(MOBILE_SHEET_QUERY);
+
+    function syncMobileDefaultSheet() {
+      if (mediaQuery.matches && !sheetHasUserInteracted) {
+        setSheetMode("collapsed");
+      } else if (!mediaQuery.matches) {
+        setSheetMode("expanded");
+      }
+    }
+
+    syncMobileDefaultSheet();
+    mediaQuery.addEventListener("change", syncMobileDefaultSheet);
+
+    return () => mediaQuery.removeEventListener("change", syncMobileDefaultSheet);
+  }, [sheetHasUserInteracted]);
 
   const searchQuery = useMemo(() => buildSearchQuery(query), [query]);
   const textSearchMatches = useMemo(() => rankStationSearchMatches(stations, searchQuery), [stations, searchQuery]);
@@ -321,6 +341,7 @@ function ChargerMapPage({ onNavigate }) {
     const nearestStation = rankStationsByDistance(searchOrigin, filteredStations)[0]?.station;
     if (!nearestStation) return;
 
+    setSheetHasUserInteracted(true);
     setSelectionMode("auto");
     setSelectedId(nearestStation.id);
     setVisibleResultCount(RESULT_PAGE_SIZE);
@@ -356,6 +377,7 @@ function ChargerMapPage({ onNavigate }) {
   function selectStation(station) {
     setSelectionMode("manual");
     setSelectedId(station.id);
+    setSheetHasUserInteracted(true);
     setSheetMode("expanded");
     mapRef.current?.flyTo([station.latitude, station.longitude], Math.max(mapRef.current.getZoom(), 14), {
       duration: 0.35,
@@ -397,6 +419,7 @@ function ChargerMapPage({ onNavigate }) {
         setSelectionMode("auto");
         setSelectedId(nearestStation.id);
         setVisibleResultCount(RESULT_PAGE_SIZE);
+        setSheetHasUserInteracted(true);
         setSheetMode("expanded");
         setLocationNotice(
           [
@@ -417,16 +440,58 @@ function ChargerMapPage({ onNavigate }) {
     );
   }
 
-  function handleSheetTouchStart(event) {
-    sheetTouchStartY.current = event.touches[0]?.clientY ?? null;
+  function handleSheetPointerDown(event) {
+    if (event.button != null && event.button !== 0) return;
+
+    sheetDragStartY.current = event.clientY;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    window.addEventListener(
+      "pointerup",
+      (pointerEvent) => {
+        if (pointerEvent.pointerId === event.pointerId) {
+          finishSheetDrag(pointerEvent.clientY);
+        }
+      },
+      { once: true },
+    );
   }
 
-  function handleSheetTouchEnd(event) {
-    if (sheetTouchStartY.current == null) return;
+  function handleSheetPointerUp(event) {
+    if (sheetDragStartY.current == null) return;
 
-    const endY = event.changedTouches[0]?.clientY ?? sheetTouchStartY.current;
-    const deltaY = endY - sheetTouchStartY.current;
-    sheetTouchStartY.current = null;
+    finishSheetDrag(event.clientY);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleSheetPointerCancel(event) {
+    sheetDragStartY.current = null;
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }
+
+  function handleSheetMouseDown(event) {
+    if (sheetDragStartY.current != null || event.button !== 0) return;
+
+    sheetDragStartY.current = event.clientY;
+
+    window.addEventListener(
+      "mouseup",
+      (mouseEvent) => {
+        finishSheetDrag(mouseEvent.clientY);
+      },
+      { once: true },
+    );
+  }
+
+  function finishSheetDrag(endY) {
+    if (sheetDragStartY.current == null) return;
+
+    const deltaY = endY - sheetDragStartY.current;
+    sheetDragStartY.current = null;
     sheetDidDrag.current = Math.abs(deltaY) > SHEET_DRAG_THRESHOLD_PX;
 
     if (sheetDidDrag.current) {
@@ -436,8 +501,10 @@ function ChargerMapPage({ onNavigate }) {
     }
 
     if (deltaY > SHEET_DRAG_THRESHOLD_PX) {
+      setSheetHasUserInteracted(true);
       setSheetMode("collapsed");
     } else if (deltaY < -SHEET_DRAG_THRESHOLD_PX) {
+      setSheetHasUserInteracted(true);
       setSheetMode("expanded");
     }
   }
@@ -448,6 +515,7 @@ function ChargerMapPage({ onNavigate }) {
       return;
     }
 
+    setSheetHasUserInteracted(true);
     setSheetMode((current) => (current === "expanded" ? "collapsed" : "expanded"));
   }
 
@@ -647,12 +715,15 @@ function ChargerMapPage({ onNavigate }) {
           className="sheet-handle"
           type="button"
           onClick={toggleSheetMode}
-          onTouchStart={handleSheetTouchStart}
-          onTouchEnd={handleSheetTouchEnd}
+          onPointerDown={handleSheetPointerDown}
+          onPointerUp={handleSheetPointerUp}
+          onPointerCancel={handleSheetPointerCancel}
+          onMouseDown={handleSheetMouseDown}
           aria-expanded={sheetMode === "expanded"}
           aria-label={sheetMode === "expanded" ? "Collapse charger details" : "Expand charger details"}
         >
-          <span aria-hidden="true" />
+          <span className="sheet-handle-bar" aria-hidden="true" />
+          {sheetMode === "collapsed" ? <ChevronsUp className="sheet-swipe-cue" size={18} aria-hidden="true" /> : null}
         </button>
 
         <div className="sheet-content">
@@ -874,6 +945,12 @@ function DataInfoPage({ onNavigate }) {
       </section>
     </main>
   );
+}
+
+function getInitialSheetMode() {
+  if (typeof window === "undefined") return "expanded";
+
+  return window.matchMedia(MOBILE_SHEET_QUERY).matches ? "collapsed" : "expanded";
 }
 
 function MapBridge({ mapRef, onCenterChange }) {
