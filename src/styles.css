@@ -236,6 +236,40 @@ button {
   border-color: rgba(8, 167, 216, 0.42);
 }
 
+.location-button {
+  grid-auto-flow: column;
+  gap: 7px;
+  width: auto;
+  min-width: 96px;
+  padding: 0 12px;
+  color: #ffffff;
+  background: var(--green-dark);
+  border-color: rgba(8, 115, 75, 0.5);
+  box-shadow:
+    inset 0 -3px 0 rgba(8, 40, 63, 0.2),
+    0 10px 20px rgba(8, 115, 75, 0.22);
+}
+
+.location-button:hover {
+  background: #0a8758;
+  box-shadow:
+    inset 0 -3px 0 rgba(8, 40, 63, 0.18),
+    0 12px 22px rgba(8, 115, 75, 0.28);
+}
+
+.location-button.locating {
+  color: #064b60;
+  background: #dff6fd;
+  border-color: rgba(8, 167, 216, 0.42);
+}
+
+.location-button-label {
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .feedback-button {
   grid-auto-flow: column;
   gap: 6px;
@@ -1470,6 +1504,11 @@ button {
     display: none;
   }
 
+  .location-button {
+    min-width: 90px;
+    padding: 0 10px;
+  }
+
   .filter-scroller {
     gap: 7px;
     min-height: 50px;
@@ -1655,6 +1694,16 @@ button {
   }
 
   .live-pill {
+    display: none;
+  }
+
+  .location-button {
+    width: 42px;
+    min-width: 42px;
+    padding: 0;
+  }
+
+  .location-button-label {
     display: none;
   }
 

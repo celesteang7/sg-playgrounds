@@ -508,7 +508,7 @@ function ChargerMapPage({ onNavigate }) {
                   {feed.loading ? "Syncing" : "Live map"}
                 </span>
               </div>
-              <p className="brand-tagline">Live Singapore EV charger updates for locations, availability, and plug details.</p>
+              <p className="brand-tagline">Live Singapore EV charger data, refreshed every 5 min with availability and plug details.</p>
               <p className="brand-status">
                 {feed.loading
                   ? "Loading Singapore chargers"
@@ -524,14 +524,16 @@ function ChargerMapPage({ onNavigate }) {
                 <span className="feedback-label">Feedback</span>
               </a>
               <button
-                className={isLocating ? "icon-button locating" : "icon-button"}
+                className={isLocating ? "icon-button location-button locating" : "icon-button location-button"}
                 type="button"
                 onClick={handleLocateMe}
                 aria-busy={isLocating}
                 aria-label="Use my location"
+                title="Find chargers near me"
                 disabled={isLocating}
               >
                 <LocateFixed size={19} />
+                <span className="location-button-label">Near me</span>
               </button>
             </div>
           </div>
@@ -842,7 +844,7 @@ function DataInfoPage({ onNavigate }) {
         </div>
         <ul>
           <li>The visible timestamp is the LTA DataMall batch update time, not the time your browser loaded the page.</li>
-          <li>The server refreshes around 5-minute clock boundaries to match LTA's documented update cadence.</li>
+          <li>The data is refreshed every 5 min, aligned to LTA's documented update cadence.</li>
           <li>Browser refreshes are also aligned to the next 5-minute boundary.</li>
           <li>Current API cache expiry: {cacheExpiryLabel}.</li>
         </ul>
