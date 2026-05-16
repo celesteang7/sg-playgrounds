@@ -69,7 +69,7 @@ Railway can host this as one Node service: the Express server serves both the AP
 If this folder is deployed from a larger repo, set the Railway service **Root Directory** to:
 
 ```text
-/electric-chargers
+/sg-electric-chargers
 ```
 
 If this folder is its own GitHub repo, no special root directory is needed.
