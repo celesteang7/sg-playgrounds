@@ -151,6 +151,18 @@ button {
   line-height: 1.2;
 }
 
+.brand-row .brand-tagline {
+  max-width: 410px;
+  color: #738178;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.brand-row .brand-status {
+  color: #315b4d;
+}
+
 .live-pill {
   display: inline-flex;
   align-items: center;
@@ -614,6 +626,30 @@ button {
   border: 3px solid #ffffff;
   border-radius: 999px;
   box-shadow: 0 4px 14px rgba(8, 167, 216, 0.35);
+}
+
+.search-place-marker {
+  background: transparent;
+  border: 0;
+}
+
+.search-place-pin {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  background: rgba(242, 165, 26, 0.18);
+  border: 1px solid rgba(242, 165, 26, 0.36);
+  border-radius: 999px;
+}
+
+.search-place-pin span {
+  width: 11px;
+  height: 11px;
+  background: var(--amber);
+  border: 3px solid #ffffff;
+  border-radius: 999px;
+  box-shadow: 0 4px 14px rgba(242, 165, 26, 0.34);
 }
 
 .leaflet-popup-content-wrapper {
@@ -1210,6 +1246,15 @@ button {
   border: 1px dashed #cfe1da;
   border-radius: 8px;
   font-weight: 800;
+}
+
+.empty-state p {
+  margin: 0;
+  text-align: center;
+}
+
+.empty-action {
+  margin-top: 4px;
 }
 
 .info-page {
