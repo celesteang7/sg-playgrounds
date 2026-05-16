@@ -1029,6 +1029,11 @@ button {
   text-transform: uppercase;
 }
 
+.nearby-header span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .station-list {
   display: grid;
   flex: 1 1 auto;
@@ -1113,7 +1118,7 @@ button {
 
 .row-meta {
   display: grid;
-  gap: 3px;
+  gap: 4px;
   justify-items: end;
   min-width: 92px;
 }
@@ -1150,6 +1155,38 @@ button {
   border-radius: 8px;
   font-size: 13px;
   line-height: 1;
+}
+
+.row-distance {
+  color: #587068;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.station-list-footer {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  padding: 10px 0 2px;
+}
+
+.show-more-button {
+  min-height: 40px;
+  padding: 0 16px;
+  color: var(--ink);
+  background: #ffffff;
+  border: 1px solid #cfe3db;
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgba(8, 40, 63, 0.07);
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.show-more-button:hover {
+  border-color: rgba(8, 167, 216, 0.32);
+  box-shadow: 0 10px 22px rgba(8, 40, 63, 0.1);
 }
 
 .empty-state {
@@ -1473,7 +1510,8 @@ button {
   .bottom-sheet.sheet-collapsed .feed-warning,
   .bottom-sheet.sheet-collapsed .detail-card,
   .bottom-sheet.sheet-collapsed .nearby-header,
-  .bottom-sheet.sheet-collapsed .station-list {
+  .bottom-sheet.sheet-collapsed .station-list,
+  .bottom-sheet.sheet-collapsed .station-list-footer {
     display: none;
   }
 

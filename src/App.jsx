@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, Popup, TileLayer, useMap } from "react-leaflet";
 import {
@@ -27,6 +27,7 @@ const CLIENT_REFRESH_MS = 5 * 60 * 1000;
 const SG_TIME_ZONE = "Asia/Singapore";
 const FEEDBACK_EMAIL = "celeste@agents.world";
 const SHEET_DRAG_THRESHOLD_PX = 44;
+const RESULT_PAGE_SIZE = 10;
 const AREA_FILTERS = [
   { id: "north", label: "North", color: "#17875a", textColor: "#ffffff" },
   { id: "south", label: "South", color: "#0f4c81", textColor: "#ffffff" },
@@ -78,7 +79,7 @@ function ChargerMapPage({ onNavigate }) {
   const [stations, setStations] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState("");
-  const [selectedFilters, setSelectedFilters] = useState(createEmptyFilterState);
+  const [selectedFilters, setSelectedFilters] = useState(createDefaultFilterState);
   const [feed, setFeed] = useState({
     loading: true,
     sourceLabel: "Loading",
@@ -87,6 +88,8 @@ function ChargerMapPage({ onNavigate }) {
     cache: null,
   });
   const [userLocation, setUserLocation] = useState(null);
+  const [mapCenter, setMapCenter] = useState(SINGAPORE_CENTER);
+  const [visibleResultCount, setVisibleResultCount] = useState(RESULT_PAGE_SIZE);
   const [locationNotice, setLocationNotice] = useState("");
   const [sheetMode, setSheetMode] = useState("expanded");
   const mapRef = useRef(null);
@@ -125,7 +128,7 @@ function ChargerMapPage({ onNavigate }) {
 
         setStations(nextStations);
         setSelectedId((current) =>
-          current && nextStations.some((station) => station.id === current) ? current : nextStations[0]?.id || null,
+          current && nextStations.some((station) => station.id === current) ? current : null,
         );
         setFeed({
           loading: false,
@@ -143,7 +146,7 @@ function ChargerMapPage({ onNavigate }) {
 
         setStations(nextStations);
         setSelectedId((current) =>
-          current && nextStations.some((station) => station.id === current) ? current : nextStations[0]?.id || null,
+          current && nextStations.some((station) => station.id === current) ? current : null,
         );
         setFeed({
           loading: false,
@@ -187,6 +190,33 @@ function ChargerMapPage({ onNavigate }) {
     });
   }, [activeAreaIds, activeOperatorIds, query, selectedFilters.availableOnly, selectedFilters.fastOnly, stations]);
 
+  const rankingOrigin = userLocation || mapCenter;
+  const rankedStations = useMemo(
+    () =>
+      filteredStations
+        .map((station) => ({
+          station,
+          distanceMeters: getDistanceMeters(rankingOrigin, [station.latitude, station.longitude]),
+        }))
+        .sort((a, b) => {
+          if (a.distanceMeters !== b.distanceMeters) return a.distanceMeters - b.distanceMeters;
+          if (a.station.availableCount !== b.station.availableCount) {
+            return b.station.availableCount - a.station.availableCount;
+          }
+          return a.station.name.localeCompare(b.station.name);
+        }),
+    [filteredStations, rankingOrigin],
+  );
+
+  const visibleRankedStations = rankedStations.slice(0, visibleResultCount);
+  const hasMoreResults = visibleRankedStations.length < rankedStations.length;
+  const resultSummary = [
+    `Showing ${formatCompactCount(visibleRankedStations.length)} of ${formatCompactCount(rankedStations.length)}`,
+    userLocation ? "nearest to you" : "tap location for distance",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
   useEffect(() => {
     setSelectedFilters((current) => {
       const availableAreaIds = new Set(areaFilters.map((item) => item.areaId));
@@ -208,8 +238,14 @@ function ChargerMapPage({ onNavigate }) {
     setLocationNotice("");
   }, [query, selectedFilters]);
 
+  useEffect(() => {
+    setVisibleResultCount(RESULT_PAGE_SIZE);
+  }, [rankingOrigin, query, selectedFilters]);
+
   const selectedStation =
-    filteredStations.length > 0 ? filteredStations.find((station) => station.id === selectedId) || filteredStations[0] : null;
+    filteredStations.length > 0
+      ? filteredStations.find((station) => station.id === selectedId) || rankedStations[0]?.station || null
+      : null;
 
   useEffect(() => {
     if (filteredStations.length === 0) {
@@ -217,10 +253,14 @@ function ChargerMapPage({ onNavigate }) {
       return;
     }
 
-    if (!selectedStation || !filteredStations.some((station) => station.id === selectedStation.id)) {
-      setSelectedId(filteredStations[0].id);
+    if (!selectedId || !filteredStations.some((station) => station.id === selectedId)) {
+      setSelectedId(rankedStations[0]?.station.id || null);
     }
-  }, [filteredStations, selectedStation]);
+  }, [filteredStations, rankedStations, selectedId]);
+
+  const handleMapCenterChange = useCallback((nextCenter) => {
+    setMapCenter((current) => (isSameMapCenter(current, nextCenter) ? current : nextCenter));
+  }, []);
 
   function selectStation(station) {
     setSelectedId(station.id);
@@ -311,7 +351,7 @@ function ChargerMapPage({ onNavigate }) {
   });
 
   function clearFilters() {
-    setSelectedFilters(createEmptyFilterState());
+    setSelectedFilters(createAllFilterState());
   }
 
   function toggleQuickFilter(stateKey) {
@@ -443,7 +483,7 @@ function ChargerMapPage({ onNavigate }) {
           scrollWheelZoom
           className="charger-map"
         >
-          <MapBridge mapRef={mapRef} />
+          <MapBridge mapRef={mapRef} onCenterChange={handleMapCenterChange} />
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -511,30 +551,47 @@ function ChargerMapPage({ onNavigate }) {
           )}
 
           <div className="nearby-header">
-            <span>Nearby chargers</span>
-            <span>{filteredStations.length} results</span>
+            <span>Available chargers</span>
+            <span>{resultSummary}</span>
           </div>
 
           <div className="station-list">
-            {filteredStations.map((station) => (
-              <button
-                className={station.id === selectedStation?.id ? "station-row active" : "station-row"}
-                key={station.id}
-                type="button"
-                onClick={() => selectStation(station)}
-              >
-                <StatusDot status={station.status} />
-                <div>
-                  <strong>{station.name}</strong>
-                  <span>{station.address}</span>
-                </div>
-                <div className="row-meta">
-                  <ProviderBadges providers={station.providers?.length ? station.providers : [station.provider]} compact />
-                  <b>{station.availableCount} open</b>
-                </div>
-              </button>
-            ))}
+            {visibleRankedStations.map(({ station, distanceMeters }) => {
+              const distanceLabel = userLocation ? formatDistanceMeters(distanceMeters) : "";
+
+              return (
+                <button
+                  className={station.id === selectedStation?.id ? "station-row active" : "station-row"}
+                  key={station.id}
+                  type="button"
+                  onClick={() => selectStation(station)}
+                >
+                  <StatusDot status={station.status} />
+                  <div>
+                    <strong>{station.name}</strong>
+                    <span>{station.address}</span>
+                  </div>
+                  <div className="row-meta">
+                    <ProviderBadges providers={station.providers?.length ? station.providers : [station.provider]} compact />
+                    {distanceLabel ? <span className="row-distance">{distanceLabel} from you</span> : null}
+                    <b>{station.availableCount} open</b>
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          {hasMoreResults ? (
+            <div className="station-list-footer">
+              <button
+                type="button"
+                className="show-more-button"
+                onClick={() => setVisibleResultCount((count) => count + RESULT_PAGE_SIZE)}
+              >
+                Show more
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
     </main>
@@ -677,12 +734,26 @@ function DataInfoPage({ onNavigate }) {
   );
 }
 
-function MapBridge({ mapRef }) {
+function MapBridge({ mapRef, onCenterChange }) {
   const map = useMap();
 
   useEffect(() => {
     mapRef.current = map;
   }, [map, mapRef]);
+
+  useEffect(() => {
+    function syncCenter() {
+      const center = map.getCenter();
+      onCenterChange([center.lat, center.lng]);
+    }
+
+    syncCenter();
+    map.on("moveend zoomend", syncCenter);
+
+    return () => {
+      map.off("moveend zoomend", syncCenter);
+    };
+  }, [map, onCenterChange]);
 
   return null;
 }
@@ -975,7 +1046,16 @@ function getActiveFilterLabel(filters, areaFilters, operatorFilters) {
   return labels.length > 0 ? labels.join(" + ") : "All";
 }
 
-function createEmptyFilterState() {
+function createDefaultFilterState() {
+  return {
+    availableOnly: true,
+    fastOnly: false,
+    areas: [],
+    operators: [],
+  };
+}
+
+function createAllFilterState() {
   return {
     availableOnly: false,
     fastOnly: false,
@@ -1283,6 +1363,19 @@ function getDistanceMeters(start, end) {
     Math.cos(startLatitude) * Math.cos(endLatitude) * Math.sin(deltaLongitude / 2) * Math.sin(deltaLongitude / 2);
 
   return 2 * earthRadiusMeters * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function formatDistanceMeters(distanceMeters) {
+  if (!Number.isFinite(distanceMeters)) return "";
+  if (distanceMeters < 50) return "< 50 m";
+  if (distanceMeters < 1000) return `${Math.round(distanceMeters / 10) * 10} m`;
+  if (distanceMeters < 10000) return `${(distanceMeters / 1000).toFixed(1)} km`;
+
+  return `${Math.round(distanceMeters / 1000)} km`;
+}
+
+function isSameMapCenter(current, next) {
+  return Math.abs(current[0] - next[0]) < 0.000001 && Math.abs(current[1] - next[1]) < 0.000001;
 }
 
 function toRadians(value) {
