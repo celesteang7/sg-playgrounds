@@ -2,7 +2,7 @@ const PROVIDERS = [
   {
     key: "sp",
     shortName: "SP",
-    appName: "SP App",
+    appName: "SP: Utilities & EV Charging",
     markerLabel: "SP",
     brandColor: "#17875a",
     brandTextColor: "#ffffff",
@@ -10,7 +10,7 @@ const PROVIDERS = [
     matches: ["sp", "singapore power", "sp group"],
     appleId: "596749130",
     androidPackage: "sg.com.singaporepower.spservices",
-    appStore: "https://apps.apple.com/sg/app/sp-rethink-green/id596749130",
+    appStore: "https://apps.apple.com/sg/app/sp-utilities-ev-charging/id596749130",
     playStore: "https://play.google.com/store/apps/details?id=sg.com.singaporepower.spservices",
     website: "https://www.spgroup.com.sg/for-individuals/electric-vehicle-charging",
   },
@@ -64,11 +64,13 @@ const PROVIDERS = [
   {
     key: "strides",
     shortName: "SY",
-    appName: "Strides YTL",
+    appName: "ChargEco",
     markerLabel: "SY",
     brandColor: "#134e8a",
     brandTextColor: "#ffffff",
     matches: ["strides ytl", "strides"],
+    appleId: "1664718768",
+    appStore: "https://apps.apple.com/sg/app/chargeco/id1664718768",
     website: "https://www.google.com/search?q=Strides+YTL+EV+charging+Singapore",
   },
   {
@@ -121,21 +123,25 @@ const PROVIDERS = [
   {
     key: "mnl",
     shortName: "MNL",
-    appName: "MNL Solutions",
+    appName: "EV Charge by MNL",
     markerLabel: "MNL",
     brandColor: "#5f6f69",
     brandTextColor: "#ffffff",
     matches: ["mnl solutions", "mnl"],
+    appleId: "1597892677",
+    appStore: "https://apps.apple.com/sg/app/ev-charge-by-mnl/id1597892677",
     website: "https://www.google.com/search?q=MNL+Solutions+EV+charging+Singapore",
   },
   {
     key: "evmobility",
     shortName: "EVM",
-    appName: "EV Mobility",
+    appName: "Juice+",
     markerLabel: "EVM",
     brandColor: "#2563eb",
     brandTextColor: "#ffffff",
     matches: ["ev mobility"],
+    appleId: "1572430525",
+    appStore: "https://apps.apple.com/sg/app/juice/id1572430525",
     website: "https://www.google.com/search?q=EV+Mobility+EV+charging+Singapore",
   },
   {
@@ -146,26 +152,32 @@ const PROVIDERS = [
     brandColor: "#f97316",
     brandTextColor: "#17201c",
     matches: ["fastparkncharge", "fast park n charge", "fast park ncharge"],
+    appleId: "6447027292",
+    appStore: "https://apps.apple.com/sg/app/fastparkncharge/id6447027292",
     website: "https://www.google.com/search?q=FastParkNCharge+EV+charging+Singapore",
   },
   {
     key: "ked",
     shortName: "KED",
-    appName: "KED Energy",
+    appName: "StriKeD",
     markerLabel: "KED",
     brandColor: "#0f766e",
     brandTextColor: "#ffffff",
     matches: ["ked energy"],
+    appleId: "6593664370",
+    appStore: "https://apps.apple.com/sg/app/striked/id6593664370",
     website: "https://www.google.com/search?q=KED+Energy+EV+charging+Singapore",
   },
   {
     key: "novowatt",
     shortName: "Novo",
-    appName: "Novowatt",
+    appName: "WATT EV CHARGING",
     markerLabel: "Novo",
     brandColor: "#7c3aed",
     brandTextColor: "#ffffff",
     matches: ["novowatt", "novo watt"],
+    appleId: "1617293408",
+    appStore: "https://apps.apple.com/sg/app/watt-ev-charging/id1617293408",
     website: "https://www.google.com/search?q=Novowatt+EV+charging+Singapore",
   },
   {
@@ -196,6 +208,8 @@ const PROVIDERS = [
     brandColor: "#dc2626",
     brandTextColor: "#ffffff",
     matches: ["city energy go", "city energy"],
+    appleId: "1615899785",
+    appStore: "https://apps.apple.com/sg/app/city-energy-go/id1615899785",
     website: "https://www.cityenergy.com.sg/",
   },
   {
@@ -246,16 +260,20 @@ const PROVIDERS = [
     brandColor: "#65a30d",
     brandTextColor: "#ffffff",
     matches: ["eneready", "ene ready"],
+    appleId: "1612599603",
+    appStore: "https://apps.apple.com/sg/app/eneready/id1612599603",
     website: "https://www.google.com/search?q=ENEReady+EV+charging+Singapore",
   },
   {
     key: "busways",
     shortName: "BW",
-    appName: "Busways",
+    appName: "BEV",
     markerLabel: "BW",
     brandColor: "#475569",
     brandTextColor: "#ffffff",
     matches: ["busways"],
+    appleId: "1586084485",
+    appStore: "https://apps.apple.com/sg/app/bev/id1586084485",
     website: "https://www.google.com/search?q=Busways+EV+charging+Singapore",
   },
   {
@@ -276,6 +294,8 @@ const PROVIDERS = [
     brandColor: "#0d9488",
     brandTextColor: "#ffffff",
     matches: ["wes cares", "wescares"],
+    appleId: "6468880863",
+    appStore: "https://apps.apple.com/sg/app/wes-cares/id6468880863",
     website: "https://www.google.com/search?q=WES+Cares+EV+charging+Singapore",
   },
   {
@@ -326,6 +346,8 @@ const PROVIDERS = [
     brandColor: "#334155",
     brandTextColor: "#ffffff",
     matches: ["iwow technology", "iwow"],
+    appleId: "6743070284",
+    appStore: "https://apps.apple.com/sg/app/icharge-sg/id6743070284",
     website: "https://www.google.com/search?q=IWOW+Technology+EV+charging+Singapore",
   },
 ];
@@ -351,15 +373,25 @@ export function getProviderProfile(providerName = "") {
 }
 
 export function canOpenProviderApp(providerName = "") {
+  return getProviderAppTarget(providerName).available;
+}
+
+export function getProviderAppTarget(providerName = "") {
   const provider = getProviderProfile(providerName);
-  return Boolean(provider.appleId || provider.androidPackage || provider.appStore || provider.playStore);
+  const platform = getClientPlatform();
+  const urls = getLaunchUrls(provider, platform);
+
+  return {
+    provider,
+    ...urls,
+    available: Boolean(urls.launchUrl || urls.fallbackUrl),
+    unavailableMessage: getUnavailableMessage(provider, platform),
+  };
 }
 
 export function openProviderApp(providerName) {
-  if (!canOpenProviderApp(providerName)) return;
-
-  const provider = getProviderProfile(providerName);
-  const { launchUrl, fallbackUrl } = getLaunchUrls(provider);
+  const { available, launchUrl, fallbackUrl } = getProviderAppTarget(providerName);
+  if (!available) return;
 
   if (!launchUrl) {
     if (fallbackUrl) window.open(fallbackUrl, "_blank", "noopener,noreferrer");
@@ -376,27 +408,49 @@ export function openProviderApp(providerName) {
   }, 900);
 }
 
-function getLaunchUrls(provider) {
-  const userAgent = window.navigator.userAgent;
-  const isIOS = /iPad|iPhone|iPod/.test(userAgent);
-  const isAndroid = /Android/i.test(userAgent);
-
-  if (isIOS && provider.appleId) {
+function getLaunchUrls(provider, platform) {
+  if (platform === "ios") {
     return {
-      launchUrl: `itms-apps://itunes.apple.com/app/id${provider.appleId}`,
-      fallbackUrl: provider.appStore,
+      launchUrl: provider.appleId ? `itms-apps://itunes.apple.com/app/id${provider.appleId}` : "",
+      fallbackUrl: provider.appStore || "",
     };
   }
 
-  if (isAndroid && provider.androidPackage) {
+  if (platform === "android") {
     return {
-      launchUrl: `market://details?id=${provider.androidPackage}`,
-      fallbackUrl: provider.playStore,
+      launchUrl: provider.androidPackage ? `market://details?id=${provider.androidPackage}` : "",
+      fallbackUrl: provider.playStore || "",
     };
   }
 
   return {
     launchUrl: "",
-    fallbackUrl: provider.appStore || provider.playStore || provider.website || "",
+    fallbackUrl: provider.appStore || provider.playStore || "",
   };
+}
+
+function getClientPlatform() {
+  if (typeof window === "undefined") return "web";
+
+  const userAgent = window.navigator.userAgent;
+  if (/iPad|iPhone|iPod/.test(userAgent)) return "ios";
+  if (/Android/i.test(userAgent)) return "android";
+
+  return "web";
+}
+
+function getUnavailableMessage(provider, platform) {
+  if (provider.key === "unknown") {
+    return "Provider has not been identified or no verified app link is available.";
+  }
+
+  if (platform === "android") {
+    return "No verified Google Play link is available for this provider yet.";
+  }
+
+  if (platform === "ios") {
+    return "No verified App Store link is available for this provider yet.";
+  }
+
+  return "No verified app store link is available for this provider yet.";
 }

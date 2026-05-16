@@ -15,19 +15,16 @@ import {
   X,
 } from "lucide-react";
 import { normalizeChargerStations, stationSearchText } from "./lib/chargers.js";
-import { canOpenProviderApp, getProviderProfile, openProviderApp } from "./data/providerApps.js";
+import { canOpenProviderApp, getProviderAppTarget, getProviderProfile, openProviderApp } from "./data/providerApps.js";
 
 const SINGAPORE_CENTER = [1.3521, 103.8198];
 const DEFAULT_ZOOM = 11;
 const CLIENT_REFRESH_MS = 60 * 60 * 1000;
 const SHEET_DRAG_THRESHOLD_PX = 44;
-const STATUS_FILTERS = [
-  { id: "all", label: "All" },
-  { id: "available", label: "Open now" },
-  { id: "fast", label: "Fast" },
-  { id: "sp", label: "SP" },
-  { id: "shell", label: "Shell" },
-  { id: "chargeplus", label: "Charge+" },
+const UTILITY_FILTERS = [
+  { id: "all", label: "All", Icon: CircleDot, color: "#08283f", textColor: "#ffffff" },
+  { id: "available", label: "Open now", Icon: BatteryCharging, color: "#18bf73", textColor: "#073825" },
+  { id: "fast", label: "Fast", Icon: PlugZap, color: "#08a7d8", textColor: "#06283a" },
 ];
 
 export default function App() {
@@ -48,6 +45,16 @@ export default function App() {
   const mapRef = useRef(null);
   const sheetTouchStartY = useRef(null);
   const sheetDidDrag = useRef(false);
+  const operatorFilters = useMemo(() => buildOperatorFilterOptions(stations), [stations]);
+  const activeOperatorFilter = operatorFilters.find((item) => item.id === filter);
+  const utilityFilterCounts = useMemo(
+    () => ({
+      all: stations.length,
+      available: stations.filter((station) => station.status === "available").length,
+      fast: stations.filter((station) => station.maxPowerKw >= 43).length,
+    }),
+    [stations],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -117,13 +124,17 @@ export default function App() {
         filter === "all" ||
         (filter === "available" && station.status === "available") ||
         (filter === "fast" && station.maxPowerKw >= 43) ||
-        (filter === "sp" && hasProviderKey(station, "sp")) ||
-        (filter === "shell" && hasProviderKey(station, "shell")) ||
-        (filter === "chargeplus" && hasProviderKey(station, "chargeplus"));
+        (activeOperatorFilter && hasProviderName(station, activeOperatorFilter.operatorName));
 
       return matchesSearch && matchesFilter;
     });
-  }, [filter, query, stations]);
+  }, [activeOperatorFilter, filter, query, stations]);
+
+  useEffect(() => {
+    if (filter.startsWith("operator:") && !operatorFilters.some((item) => item.id === filter)) {
+      setFilter("all");
+    }
+  }, [filter, operatorFilters]);
 
   useEffect(() => {
     setLocationNotice("");
@@ -222,8 +233,9 @@ export default function App() {
     setSheetMode((current) => (current === "expanded" ? "collapsed" : "expanded"));
   }
 
-  const openConnectorCount = stations.reduce((sum, station) => sum + station.availableCount, 0);
-  const totalConnectors = stations.reduce((sum, station) => sum + station.totalCount, 0);
+  const openConnectorCount = filteredStations.reduce((sum, station) => sum + station.availableCount, 0);
+  const totalConnectors = filteredStations.reduce((sum, station) => sum + station.totalCount, 0);
+  const feedUpdatedLabel = formatFeedTime(feed.updatedAt);
 
   return (
     <main className="app-shell">
@@ -231,11 +243,21 @@ export default function App() {
         <div className="top-panel">
           <div className="brand-row">
             <div className="brand-mark" aria-hidden="true">
-              <PlugZap size={20} />
+              <img src="/brand/bocharge-logo.png" alt="" />
             </div>
-            <div>
-              <h1>BoCharge</h1>
-              <p>{feed.loading ? "Loading chargers" : `${filteredStations.length} of ${stations.length} stations`}</p>
+            <div className="brand-copy">
+              <div className="brand-titleline">
+                <h1>BoCharge</h1>
+                <span className={feed.loading ? "live-pill loading" : "live-pill"}>
+                  <span aria-hidden="true" />
+                  {feed.loading ? "Syncing" : "Live map"}
+                </span>
+              </div>
+              <p>
+                {feed.loading
+                  ? "Loading Singapore chargers"
+                  : `${filteredStations.length} visible · ${openConnectorCount} open plugs`}
+              </p>
             </div>
             <button className="icon-button" type="button" onClick={handleLocateMe} aria-label="Use my location">
               <LocateFixed size={19} />
@@ -258,17 +280,28 @@ export default function App() {
             ) : null}
           </label>
 
-          <div className="filter-scroller" aria-label="Charger filters">
-            <Filter size={15} className="filter-icon" aria-hidden="true" />
-            {STATUS_FILTERS.map((item) => (
-              <button
-                className={item.id === filter ? "chip active" : "chip"}
+          <div className="filter-scroller" aria-label="Charger filters by status, speed, and operator">
+            <span className="filter-rail-label">
+              <Filter size={14} aria-hidden="true" />
+              Filters
+            </span>
+            {UTILITY_FILTERS.map((item) => (
+              <UtilityFilterChip
+                active={item.id === filter}
+                count={utilityFilterCounts[item.id]}
+                item={item}
                 key={item.id}
-                type="button"
-                onClick={() => setFilter(item.id)}
-              >
-                {item.label}
-              </button>
+                onSelect={() => setFilter(item.id)}
+              />
+            ))}
+            <span className="filter-divider" aria-hidden="true" />
+            {operatorFilters.map((item) => (
+              <OperatorFilterChip
+                active={item.id === filter}
+                item={item}
+                key={item.id}
+                onSelect={() => setFilter(item.id)}
+              />
             ))}
           </div>
 
@@ -326,9 +359,17 @@ export default function App() {
         </button>
 
         <div className="sheet-content">
+          <div className="panel-kicker">
+            <span>
+              <PlugZap size={15} aria-hidden="true" />
+              Charge board
+            </span>
+            <span>{feedUpdatedLabel}</span>
+          </div>
+
           <div className="summary-strip">
             <StatTile label="Open plugs" value={`${openConnectorCount}/${totalConnectors}`} tone="green" />
-            <StatTile label="Stations" value={stations.length} tone="blue" />
+            <StatTile label="Stations" value={filteredStations.length} tone="blue" />
             <StatTile label="Source" value={feed.sourceLabel.replace(" fallback", "")} tone="dark" />
           </div>
 
@@ -388,7 +429,7 @@ function StationDetail({ station }) {
   const providers = station.providers?.length ? station.providers : [station.provider];
   const appProviderName = providers.find((providerName) => canOpenProviderApp(providerName)) || station.provider;
   const providerProfile = getProviderProfile(appProviderName);
-  const providerAppAvailable = canOpenProviderApp(appProviderName);
+  const providerAppTarget = getProviderAppTarget(appProviderName);
   const bestPlug = station.plugTypes[0];
 
   return (
@@ -435,7 +476,7 @@ function StationDetail({ station }) {
           Open in Google Maps
         </a>
 
-        {providerAppAvailable ? (
+        {providerAppTarget.available ? (
           <button className="secondary-action" type="button" onClick={() => openProviderApp(appProviderName)}>
             <ExternalLink size={18} />
             Open {providerProfile.appName}
@@ -444,9 +485,9 @@ function StationDetail({ station }) {
           <div className="provider-unavailable">
             <button className="secondary-action unavailable" type="button" disabled>
               <Info size={18} />
-              Provider app unavailable
+              App link unavailable
             </button>
-            <p>Provider has not been identified or no app link is available.</p>
+            <p>{providerAppTarget.unavailableMessage}</p>
           </div>
         )}
       </div>
@@ -464,6 +505,7 @@ function StationDetail({ station }) {
 
 function ProviderBadge({ providerName, compact = false }) {
   const providerProfile = getProviderProfile(providerName);
+  const label = providerProfile.key === "unknown" ? getOperatorInitials(providerName) : providerProfile.shortName;
 
   return (
     <span
@@ -482,8 +524,63 @@ function ProviderBadge({ providerName, compact = false }) {
           aria-hidden="true"
         />
       ) : null}
-      <span>{providerProfile.shortName}</span>
+      <span>{label}</span>
     </span>
+  );
+}
+
+function UtilityFilterChip({ item, active, count, onSelect }) {
+  const Icon = item.Icon;
+
+  return (
+    <button
+      className={active ? "chip active" : "chip"}
+      style={{
+        "--chip-color": item.color,
+        "--chip-text": item.textColor,
+      }}
+      type="button"
+      onClick={onSelect}
+      aria-pressed={active}
+    >
+      <span className="chip-icon" aria-hidden="true">
+        <Icon size={14} />
+      </span>
+      <span>{item.label}</span>
+      <span className="chip-count">{count}</span>
+    </button>
+  );
+}
+
+function OperatorFilterChip({ item, active, onSelect }) {
+  const { profile } = item;
+  const iconLabel = profile.key === "unknown" ? getOperatorInitials(item.operatorName) : profile.markerLabel;
+
+  return (
+    <button
+      className={active ? "operator-chip active" : "operator-chip"}
+      style={{
+        "--provider-color": profile.brandColor,
+        "--provider-text": profile.brandTextColor,
+      }}
+      type="button"
+      onClick={onSelect}
+      aria-label={`Filter by operator ${item.operatorName}. ${item.stationCount} stations.`}
+      aria-pressed={active}
+      title={item.operatorName}
+    >
+      <span className="operator-chip-icon" aria-hidden="true">
+        {profile.logoSrc ? (
+          <img className={`operator-chip-logo operator-chip-logo-${profile.key}`} src={profile.logoSrc} alt="" />
+        ) : (
+          <span>{iconLabel}</span>
+        )}
+      </span>
+      <span className="operator-chip-copy">
+        <span className="operator-chip-name">{item.label}</span>
+        <span className="operator-chip-count">{item.stationCount} sites</span>
+      </span>
+    </button>
   );
 }
 
@@ -545,7 +642,10 @@ function createStationIcon(station, selected) {
     `pin-${station.status}`,
     selected ? "selected" : "",
   ].join(" ");
-  const label = providerProfile.markerLabel || station.providerInitials || station.provider.slice(0, 2).toUpperCase();
+  const label =
+    providerProfile.key === "unknown"
+      ? station.providerInitials || getOperatorInitials(station.provider)
+      : providerProfile.markerLabel || station.providerInitials || station.provider.slice(0, 2).toUpperCase();
   const markerContent = providerProfile.logoSrc
     ? `<img class="pin-logo pin-logo-${providerProfile.key}" src="${escapeAttribute(providerProfile.logoSrc)}" alt="" aria-hidden="true" />`
     : `<span class="pin-label">${escapeHtml(label)}</span>`;
@@ -577,6 +677,18 @@ function getGoogleMapsUrl(station) {
   return `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving&dir_action=navigate&destination_name=${destinationName}`;
 }
 
+function formatFeedTime(value) {
+  if (!value) return "Freshness TBC";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Updated recently";
+
+  return `Updated ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}
+
 function getStationPayload(payload) {
   const records = payload.stations || payload;
 
@@ -585,10 +697,6 @@ function getStationPayload(payload) {
   }
 
   return normalizeChargerStations(records);
-}
-
-function hasProviderKey(station, providerKey) {
-  return station.providerKey === providerKey || toArray(station.providerKeys).includes(providerKey);
 }
 
 function uniqueProviderNames(providers) {
@@ -600,6 +708,118 @@ function uniqueProviderNames(providers) {
     seen.add(normalized);
     return true;
   });
+}
+
+function buildOperatorFilterOptions(stations) {
+  const operators = new Map();
+
+  stations.forEach((station) => {
+    const providerNames = uniqueProviderNames(station.providers?.length ? station.providers : [station.provider]);
+
+    providerNames.forEach((operatorName) => {
+      const normalizedOperatorName = normalizeOperatorFilterValue(operatorName);
+      if (!normalizedOperatorName) return;
+
+      const id = `operator:${normalizedOperatorName}`;
+      const existing = operators.get(id);
+
+      if (existing) {
+        existing.stationCount += 1;
+        existing.availableCount += station.availableCount;
+        existing.totalCount += station.totalCount;
+        return;
+      }
+
+      operators.set(id, {
+        id,
+        operatorName,
+        label: formatOperatorFilterLabel(operatorName),
+        profile: getProviderProfile(operatorName),
+        stationCount: 1,
+        availableCount: station.availableCount,
+        totalCount: station.totalCount,
+      });
+    });
+  });
+
+  return [...operators.values()].sort((a, b) => {
+    if (b.stationCount !== a.stationCount) return b.stationCount - a.stationCount;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+function hasProviderName(station, providerName) {
+  const target = normalizeOperatorFilterValue(providerName);
+  const providerNames = uniqueProviderNames(station.providers?.length ? station.providers : [station.provider]);
+
+  return providerNames.some((name) => normalizeOperatorFilterValue(name) === target);
+}
+
+function normalizeOperatorFilterValue(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+function formatOperatorFilterLabel(operatorName) {
+  const strippedName = String(operatorName || "")
+    .replace(/\b(private\s+limited|pte\.?\s*ltd\.?|ltd\.?|limited)\b\.?/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const label = strippedName || String(operatorName || "").trim() || "Unknown";
+
+  return label
+    .split(/\s+/)
+    .map(formatOperatorWord)
+    .join(" ")
+    .replace(/\bComfortdelgro\b/g, "ComfortDelGro")
+    .replace(/\bEneready\b/g, "ENEReady")
+    .replace(/\bEvone\b/g, "EVOne")
+    .replace(/\bFastparkncharge\b/g, "FastParkNCharge")
+    .replace(/\bIwow\b/g, "IWOW");
+}
+
+function formatOperatorWord(word) {
+  if (!word) return "";
+
+  const trimmed = word.trim();
+  const upper = trimmed.toUpperCase();
+  const compact = upper.replace(/[^A-Z0-9+]/g, "");
+  const exact = {
+    SP: "SP",
+    YTL: "YTL",
+    MNL: "MNL",
+    EV: "EV",
+    KED: "KED",
+    ST: "ST",
+    UP: "UP",
+    CTN: "CTN",
+    GO: "GO",
+    NSP: "NSP",
+  };
+
+  if (exact[compact]) return exact[compact];
+  if (compact === "CHARGE+") return "Charge+";
+  if (trimmed.includes("-")) return trimmed.split("-").map(formatOperatorWord).join("-");
+
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1).toLowerCase();
+}
+
+function getOperatorInitials(operatorName) {
+  const label = formatOperatorFilterLabel(operatorName);
+  const compact = label.replace(/[^a-z0-9+ ]/gi, "").trim();
+  if (!compact) return "EV";
+  if (/charge\+/i.test(compact)) return "C+";
+
+  const words = compact.split(/\s+/);
+  if (words.length === 1) return words[0].slice(0, 4).toUpperCase();
+
+  return words
+    .slice(0, 2)
+    .map((word) => word[0])
+    .join("")
+    .toUpperCase();
 }
 
 function toArray(value) {

@@ -155,7 +155,7 @@ function isLtaBatchDownloadLink(value) {
 }
 
 function collectPlugTypes(record, chargingPoints) {
-  const recordProvider = cleanString(record.operator || record.Operator || record.provider || record.Provider || "");
+  const recordProvider = getRecordProvider(record);
   const plugs = toArray(record.plugTypes || record.PlugTypes).map((plug) => normalizePlugType(plug, recordProvider));
 
   chargingPoints.forEach((point) => {
@@ -218,14 +218,28 @@ function firstChargingPointValue(chargingPoints, keys) {
 
 function collectProviders(record, chargingPoints) {
   return uniqueValues([
-    cleanString(record.operator || record.Operator || ""),
-    cleanString(record.provider || record.Provider || ""),
-    ...chargingPoints.map(getChargingPointProvider),
+    ...getProviderCandidates(record),
+    ...chargingPoints.flatMap(getProviderCandidates),
   ]).filter(Boolean);
 }
 
+function getRecordProvider(record) {
+  return getProviderCandidates(record)[0] || "";
+}
+
 function getChargingPointProvider(point) {
-  return cleanString(point?.operator || point?.Operator || point?.provider || point?.Provider || "");
+  return getProviderCandidates(point)[0] || "";
+}
+
+function getProviderCandidates(source) {
+  if (!source || typeof source !== "object") return [];
+
+  return uniqueValues([
+    cleanString(source.operatorName || source.OperatorName || ""),
+    cleanString(source.operator || source.Operator || ""),
+    cleanString(source.providerName || source.ProviderName || ""),
+    cleanString(source.provider || source.Provider || ""),
+  ]).filter(Boolean);
 }
 
 function normalizePlugType(plug, provider = "") {
