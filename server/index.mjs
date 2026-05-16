@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractLtaBatchLink, normalizeChargerStations } from "../src/lib/chargers.js";
+import { normalizeSearchText } from "../src/lib/search.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
@@ -16,11 +17,22 @@ const cacheTtlMs = Number.isFinite(configuredCacheTtlMs) && configuredCacheTtlMs
 const configuredLtaFetchTimeoutMs = Number(process.env.LTA_FETCH_TIMEOUT_MS || 15000);
 const ltaFetchTimeoutMs =
   Number.isFinite(configuredLtaFetchTimeoutMs) && configuredLtaFetchTimeoutMs > 0 ? configuredLtaFetchTimeoutMs : 15000;
+const oneMapBaseUrl = process.env.ONEMAP_BASE_URL || "https://www.onemap.gov.sg";
+const oneMapApiToken = process.env.ONEMAP_API_TOKEN || "";
+const oneMapEmail = process.env.ONEMAP_EMAIL || "";
+const oneMapPassword = process.env.ONEMAP_PASSWORD || "";
+const configuredOneMapCacheTtlMs = Number(process.env.ONEMAP_CACHE_TTL_MS || 30 * 24 * 60 * 60 * 1000);
+const oneMapSearchCacheTtlMs =
+  Number.isFinite(configuredOneMapCacheTtlMs) && configuredOneMapCacheTtlMs > 0
+    ? configuredOneMapCacheTtlMs
+    : 30 * 24 * 60 * 60 * 1000;
 
 let liveCache = null;
 let liveRefreshPromise = null;
 let sampleCache = null;
 let alignedRefreshTimer = null;
+let oneMapTokenCache = null;
+const oneMapSearchCache = new Map();
 
 const app = express();
 
@@ -65,6 +77,27 @@ app.get("/api/chargers", async (_req, res) => {
   res.json(payload);
 });
 
+app.get("/api/search-place", async (req, res) => {
+  const query = normalizeSearchText(req.query.q);
+
+  if (query.length < 2) {
+    res.json({ results: [] });
+    return;
+  }
+
+  try {
+    const payload = await searchOneMapPlace(query);
+    const maxAgeSeconds = Math.max(60, Math.round(oneMapSearchCacheTtlMs / 1000));
+
+    res.set("Cache-Control", `public, max-age=${maxAgeSeconds}, stale-while-revalidate=86400`);
+    res.json(payload);
+  } catch (error) {
+    const warning = error instanceof Error ? error.message : "Place search unavailable.";
+
+    res.status(200).json({ results: [], warning });
+  }
+});
+
 app.use(express.static(path.join(rootDir, "dist")));
 
 app.get(/.*/, (_req, res) => {
@@ -99,9 +132,10 @@ async function getChargersPayload() {
     return buildLivePayload(refreshedCache, "refreshed");
   } catch (error) {
     const warning = error instanceof Error ? error.message : "Unable to load LTA charger feed.";
+    console.warn(`LTA live refresh failed: ${warning}`);
 
     if (liveCache) {
-      return buildLivePayload(liveCache, "stale", `Showing cached live data because refresh failed: ${warning}`);
+      return buildLivePayload(liveCache, "stale");
     }
 
     return buildSamplePayload(warning, true);
@@ -167,6 +201,148 @@ async function ensureLiveCacheForCurrentSlot() {
   return liveRefreshPromise;
 }
 
+async function searchOneMapPlace(query) {
+  const cacheKey = normalizeSearchText(query);
+  const cached = oneMapSearchCache.get(cacheKey);
+
+  if (cached && cached.expiresAtMs > Date.now()) {
+    return cached.payload;
+  }
+
+  const payload = await fetchOneMapPlaces(cacheKey);
+
+  oneMapSearchCache.set(cacheKey, {
+    expiresAtMs: Date.now() + oneMapSearchCacheTtlMs,
+    payload,
+  });
+
+  return payload;
+}
+
+async function fetchOneMapPlaces(query) {
+  const url = new URL("/api/common/elastic/search", oneMapBaseUrl);
+  url.searchParams.set("searchVal", query);
+  url.searchParams.set("returnGeom", "Y");
+  url.searchParams.set("getAddrDetails", "Y");
+  url.searchParams.set("pageNum", "1");
+
+  const authorization = await getOneMapAuthorizationHeader();
+  const response = await fetch(url, {
+    headers: {
+      accept: "application/json",
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+    signal: AbortSignal.timeout(ltaFetchTimeoutMs),
+  });
+
+  if (!response.ok) {
+    throw new Error(`OneMap search returned ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const results = toArray(payload.results).map(normalizeOneMapPlace).filter(Boolean).slice(0, 5);
+  const warning =
+    payload.error && results.length === 0
+      ? payload.error
+      : !authorization
+        ? "OneMap token is not configured; place search may be limited."
+        : "";
+
+  return {
+    results,
+    warning,
+  };
+}
+
+async function getOneMapAuthorizationHeader() {
+  if (oneMapApiToken) return oneMapApiToken;
+  if (!oneMapEmail || !oneMapPassword) return "";
+
+  if (oneMapTokenCache && oneMapTokenCache.expiresAtMs > Date.now() + 5 * 60 * 1000) {
+    return oneMapTokenCache.token;
+  }
+
+  const tokenResponse = await fetch(new URL("/api/auth/post/getToken", oneMapBaseUrl), {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      email: oneMapEmail,
+      password: oneMapPassword,
+    }),
+    signal: AbortSignal.timeout(ltaFetchTimeoutMs),
+  });
+
+  if (!tokenResponse.ok) {
+    throw new Error(`OneMap token request returned ${tokenResponse.status}`);
+  }
+
+  const payload = await tokenResponse.json();
+  const token = payload.access_token || payload.token || "";
+
+  if (!token) {
+    throw new Error("OneMap token response did not include an access token.");
+  }
+
+  const expiresAtMs = getOneMapTokenExpiryMs(payload);
+
+  oneMapTokenCache = {
+    expiresAtMs,
+    token,
+  };
+
+  return token;
+}
+
+function normalizeOneMapPlace(place) {
+  const latitude = toNumber(place.LATITUDE ?? place.latitude);
+  const longitude = toNumber(place.LONGITUDE ?? place.LONGTITUDE ?? place.longitude ?? place.longtitude);
+
+  if (!isSingaporeCoordinate(latitude, longitude)) return null;
+
+  const label = cleanOneMapValue(place.SEARCHVAL || place.BUILDING || place.searchVal || place.building || "");
+  const address = cleanOneMapValue(place.ADDRESS || place.address || label);
+  const postalCode = cleanOneMapValue(place.POSTAL || place.postal || "");
+
+  return {
+    id: `onemap:${normalizeSearchText(label || address)}:${latitude.toFixed(6)},${longitude.toFixed(6)}`,
+    address,
+    label: label || address,
+    latitude,
+    longitude,
+    postalCode: postalCode === "NIL" ? "" : postalCode,
+  };
+}
+
+function getOneMapTokenExpiryMs(payload) {
+  const expiryTimestamp = Number(payload.expiry_timestamp || payload.expiryTimestamp || payload.expires_at || 0);
+
+  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > 0) {
+    return expiryTimestamp > 1_000_000_000_000 ? expiryTimestamp : expiryTimestamp * 1000;
+  }
+
+  return Date.now() + 72 * 60 * 60 * 1000;
+}
+
+function cleanOneMapValue(value) {
+  return String(value || "").trim();
+}
+
+function isSingaporeCoordinate(latitude, longitude) {
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= 1.15 && latitude <= 1.5 && longitude >= 103.55 && longitude <= 104.15;
+}
+
+function toNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function toArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 function scheduleAlignedLiveRefresh() {
   if (alignedRefreshTimer) clearTimeout(alignedRefreshTimer);
 
@@ -188,7 +364,7 @@ function buildLivePayload(cache, cacheStatus, warning = "") {
   return {
     stations: cache.stations,
     source: "lta-datamall",
-    sourceLabel: cacheStatus === "stale" ? "Cached LTA DataMall" : "Live LTA DataMall",
+    sourceLabel: "Live LTA DataMall",
     ltaConfigured: true,
     updatedAt: cache.ltaUpdatedAt || "",
     lastUpdatedTime: cache.ltaLastUpdatedTime || "",

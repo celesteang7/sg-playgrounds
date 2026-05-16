@@ -19,7 +19,7 @@ This app follows that cadence:
 - Default `CACHE_TTL_MS` -> `300000` ms, or 5 minutes
 - Browser auto-refresh -> the next `:00`, `:05`, `:10`, `:15`, etc. 5-minute clock boundary, shown in the app as SGT
 - HTTP cache expiry -> `max-age` is calculated to expire at the next 5-minute boundary, rather than 5 minutes after a random page load
-- If a live refresh fails after a previous successful live fetch, the server returns the last cached live payload with a warning
+- If a live refresh fails after a previous successful live fetch, the server logs the failure and returns the last cached live payload without showing a frontend warning
 - If no `LTA_ACCOUNT_KEY` is configured, the app uses `public/data/sample-chargers.json`
 
 This means normal production traffic should make roughly one LTA batch refresh per running server process at each 5-minute boundary, not one LTA call per user. A cold server with no live cache may still warm itself on the first request so the website can show data immediately.
@@ -35,6 +35,26 @@ The LTA EV Charging Points Batch feed includes latitude and longitude for each s
 
 These are lightweight geographic buckets for filtering and should not be treated as official URA, postal-sector, or LTA region boundaries. If exact administrative regions become important, add a polygon dataset and test each charger coordinate against those polygons.
 
+## Typed Location Search
+
+Typed search is free-first. The browser normalizes the query, removes words such as `near` and `around`, scores local charger text matches, and supports common place aliases such as `mbs`. Known places such as Marina Bay and Marina Bay Sands rank chargers by nearby distance rather than requiring the place name to appear in the charger record.
+
+For place queries that are not covered locally, the server exposes:
+
+```text
+GET /api/search-place?q=marina%20bay%20sands
+```
+
+This endpoint proxies OneMap Search from the server, caches normalized query results, and returns only label/address/coordinate fields to the browser. Configure either `ONEMAP_API_TOKEN` or `ONEMAP_EMAIL` plus `ONEMAP_PASSWORD` to avoid exposing OneMap credentials client-side:
+
+```bash
+ONEMAP_API_TOKEN=your_short_lived_token
+# Or use credentials so the server can refresh tokens:
+ONEMAP_EMAIL=you@example.com
+ONEMAP_PASSWORD=your_password
+ONEMAP_CACHE_TTL_MS=2592000000
+```
+
 ## Key Handling
 
 Never put the LTA key in client-side code or a `VITE_` variable. Keep it server-only:
@@ -43,6 +63,9 @@ Never put the LTA key in client-side code or a `VITE_` variable. Keep it server-
 LTA_ACCOUNT_KEY=your_lta_datamall_account_key
 CACHE_TTL_MS=300000
 LTA_FETCH_TIMEOUT_MS=15000
+ONEMAP_API_TOKEN=optional_onemap_token
+# Or use ONEMAP_EMAIL and ONEMAP_PASSWORD so the server can refresh tokens.
+ONEMAP_CACHE_TTL_MS=2592000000
 ```
 
 The key is read by [server/index.mjs](server/index.mjs) and sent to LTA using the `AccountKey` request header.
@@ -141,7 +164,7 @@ Expected live health response:
 - If traffic grows, add Redis and move the `/api/chargers` cache there before scaling horizontally.
 - Do not log `LTA_ACCOUNT_KEY`.
 - If `/api/chargers` returns `source: "sample"`, either the key is missing or the live LTA call failed before any live cache existed.
-- If it returns `sourceLabel: "Cached LTA DataMall"`, users are seeing the last successful live payload while a refresh problem is present.
+- If `cache.status` is `stale`, users are seeing the last successful live payload while a refresh problem is present; the public UI still fills silently and the failure is logged server-side.
 - LTA's published API threshold is high, but the correct pattern is still to cache because this specific feed only updates every 5 minutes.
 
 ## Provider App Links

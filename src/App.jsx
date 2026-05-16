@@ -17,7 +17,8 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { normalizeChargerStations, stationSearchText } from "./lib/chargers.js";
+import { normalizeChargerStations } from "./lib/chargers.js";
+import { PLACE_SEARCH_RADIUS_METERS, buildSearchQuery, rankStationSearchMatches } from "./lib/search.js";
 import { canOpenProviderApp, getProviderAppTarget, getProviderProfile, openProviderApp } from "./data/providerApps.js";
 
 const SINGAPORE_CENTER = [1.3521, 103.8198];
@@ -80,6 +81,9 @@ function ChargerMapPage({ onNavigate }) {
   const [selectedId, setSelectedId] = useState(null);
   const [selectionMode, setSelectionMode] = useState("auto");
   const [query, setQuery] = useState("");
+  const [resolvedPlace, setResolvedPlace] = useState(null);
+  const [placeSearchStatus, setPlaceSearchStatus] = useState("idle");
+  const [placeSearchWarning, setPlaceSearchWarning] = useState("");
   const [selectedFilters, setSelectedFilters] = useState(createDefaultFilterState);
   const [feed, setFeed] = useState({
     loading: true,
@@ -178,31 +182,112 @@ function ChargerMapPage({ onNavigate }) {
     };
   }, []);
 
-  const filteredStations = useMemo(() => {
-    const search = query.trim().toLowerCase();
-
-    return stations.filter((station) => {
-      const matchesSearch = !search || stationSearchText(station).includes(search);
-      const matchesAvailability = !selectedFilters.availableOnly || station.availableCount > 0;
-      const matchesSpeed = !selectedFilters.fastOnly || station.maxPowerKw >= 43;
-      const matchesArea = activeAreaIds.size === 0 || activeAreaIds.has(getStationArea(station).id);
-      const matchesOperator = activeOperatorIds.size === 0 || hasProviderFilterId(station, activeOperatorIds);
-
-      return matchesSearch && matchesAvailability && matchesSpeed && matchesArea && matchesOperator;
-    });
-  }, [activeAreaIds, activeOperatorIds, query, selectedFilters.availableOnly, selectedFilters.fastOnly, stations]);
-
-  const rankingOrigin = userLocation || mapCenter;
-  const rankedStations = useMemo(() => rankStationsByDistance(rankingOrigin, filteredStations), [filteredStations, rankingOrigin]);
+  const searchQuery = useMemo(() => buildSearchQuery(query), [query]);
+  const textSearchMatches = useMemo(() => rankStationSearchMatches(stations, searchQuery), [stations, searchQuery]);
+  const textSearchScoreById = useMemo(
+    () => new Map(textSearchMatches.map((match) => [match.station.id, match.score])),
+    [textSearchMatches],
+  );
+  const searchPlace = searchQuery.knownPlace || resolvedPlace;
+  const searchOrigin = useMemo(
+    () => (searchPlace ? [searchPlace.latitude, searchPlace.longitude] : null),
+    [searchPlace],
+  );
+  const searchCandidates = useMemo(() => {
+    if (!searchQuery.active) return stations;
+    if (searchOrigin) return getNearbyStationCandidates(stations, searchOrigin);
+    return textSearchMatches.map((match) => match.station);
+  }, [searchOrigin, searchQuery.active, stations, textSearchMatches]);
+  const filteredStations = useMemo(
+    () =>
+      searchCandidates.filter((station) =>
+        stationPassesFilters(station, selectedFilters, activeAreaIds, activeOperatorIds),
+      ),
+    [activeAreaIds, activeOperatorIds, searchCandidates, selectedFilters],
+  );
+  const hiddenSearchMatchCount = searchQuery.active ? Math.max(0, searchCandidates.length - filteredStations.length) : 0;
+  const rankingOrigin = searchOrigin || userLocation || mapCenter;
+  const rankedStations = useMemo(
+    () =>
+      rankStationsByDistance(
+        rankingOrigin,
+        filteredStations,
+        searchQuery.active && !searchOrigin ? textSearchScoreById : null,
+      ),
+    [filteredStations, rankingOrigin, searchOrigin, searchQuery.active, textSearchScoreById],
+  );
 
   const visibleRankedStations = rankedStations.slice(0, visibleResultCount);
   const hasMoreResults = visibleRankedStations.length < rankedStations.length;
+  const distanceSourceLabel = searchPlace ? searchPlace.label : userLocation ? "you" : "";
   const resultSummary = [
     `Showing ${formatCompactCount(visibleRankedStations.length)} of ${formatCompactCount(rankedStations.length)}`,
-    userLocation ? "nearest to you" : "tap location for distance",
+    searchPlace ? `nearest to ${searchPlace.label}` : userLocation ? "nearest to you" : "tap location for distance",
+    placeSearchStatus === "loading" ? "checking place" : "",
   ]
     .filter(Boolean)
     .join(" · ");
+
+  useEffect(() => {
+    const shouldSearchPlace =
+      searchQuery.active &&
+      !searchQuery.knownPlace &&
+      (searchQuery.hasPlaceIntent || textSearchMatches.length === 0) &&
+      searchQuery.normalized.length >= 2;
+
+    if (!shouldSearchPlace) {
+      setResolvedPlace(null);
+      setPlaceSearchStatus("idle");
+      setPlaceSearchWarning("");
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setPlaceSearchStatus("loading");
+      setPlaceSearchWarning("");
+
+      try {
+        const response = await fetch(`/api/search-place?q=${encodeURIComponent(searchQuery.normalized)}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Place search returned ${response.status}`);
+
+        const payload = await response.json();
+        const place = payload.results?.[0] || null;
+
+        if (controller.signal.aborted) return;
+
+        if (place) {
+          setResolvedPlace(place);
+          setPlaceSearchStatus("ready");
+          setPlaceSearchWarning(payload.warning || "");
+          return;
+        }
+
+        setResolvedPlace(null);
+        setPlaceSearchStatus("empty");
+        setPlaceSearchWarning(payload.warning || "No matching Singapore place found.");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        setResolvedPlace(null);
+        setPlaceSearchStatus("error");
+        setPlaceSearchWarning(error instanceof Error ? error.message : "Place search unavailable.");
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    searchQuery.active,
+    searchQuery.hasPlaceIntent,
+    searchQuery.knownPlace,
+    searchQuery.normalized,
+    textSearchMatches.length,
+  ]);
 
   useEffect(() => {
     setSelectedFilters((current) => {
@@ -229,6 +314,19 @@ function ChargerMapPage({ onNavigate }) {
   useEffect(() => {
     setVisibleResultCount(RESULT_PAGE_SIZE);
   }, [rankingOrigin, query, selectedFilters]);
+
+  useEffect(() => {
+    if (!searchOrigin || filteredStations.length === 0) return;
+
+    const nearestStation = rankStationsByDistance(searchOrigin, filteredStations)[0]?.station;
+    if (!nearestStation) return;
+
+    setSelectionMode("auto");
+    setSelectedId(nearestStation.id);
+    setVisibleResultCount(RESULT_PAGE_SIZE);
+    setSheetMode("expanded");
+    zoomToLocationAndStation(mapRef.current, searchOrigin, nearestStation);
+  }, [filteredStations, searchOrigin]);
 
   const selectedStation =
     filteredStations.length > 0
@@ -361,6 +459,13 @@ function ChargerMapPage({ onNavigate }) {
     query,
     visibleCount: filteredStations.length,
   });
+  const searchNotice =
+    hiddenSearchMatchCount > 0 && filteredStations.length === 0
+      ? `${formatCompactCount(hiddenSearchMatchCount)} matching chargers are hidden by the current filters.`
+      : placeSearchWarning && searchQuery.active && !searchPlace && textSearchMatches.length === 0
+        ? placeSearchWarning
+        : "";
+  const topNotice = locationNotice || searchNotice;
 
   function clearFilters() {
     setSelectedFilters(createAllFilterState());
@@ -403,7 +508,8 @@ function ChargerMapPage({ onNavigate }) {
                   {feed.loading ? "Syncing" : "Live map"}
                 </span>
               </div>
-              <p>
+              <p className="brand-tagline">Live Singapore EV charger updates for locations, availability, and plug details.</p>
+              <p className="brand-status">
                 {feed.loading
                   ? "Loading Singapore chargers"
                   : `${filteredStations.length} visible · ${openConnectorCount} open plugs`}
@@ -436,8 +542,8 @@ function ChargerMapPage({ onNavigate }) {
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search area or provider"
-              aria-label="Search charging areas or providers"
+              placeholder="Search place, area, or provider"
+              aria-label="Search charging places, areas, or providers"
             />
             {query ? (
               <button type="button" onClick={() => setQuery("")} aria-label="Clear search">
@@ -490,7 +596,7 @@ function ChargerMapPage({ onNavigate }) {
             ))}
           </div>
 
-          {locationNotice ? <div className="location-notice">{locationNotice}</div> : null}
+          {topNotice ? <div className="location-notice">{topNotice}</div> : null}
         </div>
 
         <MapContainer
@@ -525,6 +631,11 @@ function ChargerMapPage({ onNavigate }) {
           {userLocation ? (
             <Marker position={userLocation} icon={createUserIcon()}>
               <Popup>Your location</Popup>
+            </Marker>
+          ) : null}
+          {searchPlace ? (
+            <Marker position={[searchPlace.latitude, searchPlace.longitude]} icon={createSearchPlaceIcon()}>
+              <Popup>{searchPlace.label}</Popup>
             </Marker>
           ) : null}
         </MapContainer>
@@ -565,7 +676,18 @@ function ChargerMapPage({ onNavigate }) {
           ) : (
             <div className="empty-state">
               <CircleDot size={22} />
-              <p>No matching chargers found.</p>
+              <p>
+                {hiddenSearchMatchCount > 0
+                  ? `${formatCompactCount(hiddenSearchMatchCount)} matching chargers are hidden by the current filters.`
+                  : placeSearchStatus === "loading"
+                    ? "Looking up that place."
+                    : "No matching chargers found."}
+              </p>
+              {hiddenSearchMatchCount > 0 ? (
+                <button className="show-more-button empty-action" type="button" onClick={clearFilters}>
+                  Clear filters
+                </button>
+              ) : null}
             </div>
           )}
 
@@ -576,7 +698,7 @@ function ChargerMapPage({ onNavigate }) {
 
           <div className="station-list">
             {visibleRankedStations.map(({ station, distanceMeters }) => {
-              const distanceLabel = userLocation ? formatDistanceMeters(distanceMeters) : "";
+              const distanceLabel = distanceSourceLabel ? formatDistanceMeters(distanceMeters) : "";
 
               return (
                 <button
@@ -592,7 +714,7 @@ function ChargerMapPage({ onNavigate }) {
                   </div>
                   <div className="row-meta">
                     <ProviderBadges providers={station.providers?.length ? station.providers : [station.provider]} compact />
-                    {distanceLabel ? <span className="row-distance">{distanceLabel} from you</span> : null}
+                    {distanceLabel ? <span className="row-distance">{distanceLabel} from {distanceSourceLabel}</span> : null}
                     <b>{station.availableCount} open</b>
                   </div>
                 </button>
@@ -734,7 +856,7 @@ function DataInfoPage({ onNavigate }) {
         <ul>
           <li>Availability can lag real-world charger usage because operators and LTA update the feed asynchronously.</li>
           <li>Provider apps remain the best confirmation point before driving to a charger.</li>
-          <li>If a live LTA refresh fails, the app can show the last successful cached LTA payload with a warning.</li>
+          <li>If a live LTA refresh fails, the app can keep showing the last successful cached LTA payload.</li>
           <li>If no LTA key is configured, the app falls back to a bundled snapshot and labels it as sample data.</li>
         </ul>
       </section>
@@ -1024,6 +1146,15 @@ function createUserIcon() {
   });
 }
 
+function createSearchPlaceIcon() {
+  return L.divIcon({
+    className: "search-place-marker",
+    html: '<span class="search-place-pin"><span></span></span>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
+
 function getGoogleMapsUrl(station) {
   const destination = encodeURIComponent(`${station.latitude},${station.longitude}`);
   const destinationName = encodeURIComponent(station.name || station.address || "EV charger");
@@ -1085,6 +1216,15 @@ function createAllFilterState() {
 
 function hasActiveFilters(filters) {
   return Boolean(filters.availableOnly || filters.fastOnly || filters.areas.length > 0 || filters.operators.length > 0);
+}
+
+function stationPassesFilters(station, selectedFilters, activeAreaIds, activeOperatorIds) {
+  const matchesAvailability = !selectedFilters.availableOnly || station.availableCount > 0;
+  const matchesSpeed = !selectedFilters.fastOnly || station.maxPowerKw >= 43;
+  const matchesArea = activeAreaIds.size === 0 || activeAreaIds.has(getStationArea(station).id);
+  const matchesOperator = activeOperatorIds.size === 0 || hasProviderFilterId(station, activeOperatorIds);
+
+  return matchesAvailability && matchesSpeed && matchesArea && matchesOperator;
 }
 
 function toggleValue(values, value) {
@@ -1252,8 +1392,13 @@ function getStationArea(station) {
   const lngDelta = station.longitude - AREA_CENTER.longitude;
   const centralLatSpan = 0.035;
   const centralLngSpan = 0.045;
+  const inDowntownCore =
+    station.latitude >= 1.265 &&
+    station.latitude <= 1.305 &&
+    station.longitude >= 103.84 &&
+    station.longitude <= 103.875;
 
-  if (Math.abs(latDelta) <= centralLatSpan && Math.abs(lngDelta) <= centralLngSpan) {
+  if (inDowntownCore || (Math.abs(latDelta) <= centralLatSpan && Math.abs(lngDelta) <= centralLngSpan)) {
     return { id: "central", label: "Central" };
   }
 
@@ -1359,13 +1504,22 @@ function isNormalizedStation(station) {
   );
 }
 
-function rankStationsByDistance(origin, stations) {
+function getNearbyStationCandidates(stations, origin) {
+  const ranked = rankStationsByDistance(origin, stations);
+  const nearby = ranked.filter((item) => item.distanceMeters <= PLACE_SEARCH_RADIUS_METERS);
+
+  return (nearby.length >= RESULT_PAGE_SIZE ? nearby : ranked.slice(0, RESULT_PAGE_SIZE * 3)).map((item) => item.station);
+}
+
+function rankStationsByDistance(origin, stations, searchScoreById = null) {
   return stations
     .map((station) => ({
       station,
       distanceMeters: getDistanceMeters(origin, [station.latitude, station.longitude]),
+      searchScore: searchScoreById?.get(station.id) || 0,
     }))
     .sort((a, b) => {
+      if (a.searchScore !== b.searchScore) return b.searchScore - a.searchScore;
       if (a.distanceMeters !== b.distanceMeters) return a.distanceMeters - b.distanceMeters;
       if (a.station.availableCount !== b.station.availableCount) {
         return b.station.availableCount - a.station.availableCount;
