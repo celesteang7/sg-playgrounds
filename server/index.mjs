@@ -42,10 +42,10 @@ app.use((_req, res, next) => {
   res.set({
     "Content-Security-Policy": [
       "default-src 'self'",
-      "script-src 'self'",
+      "script-src 'self' https://www.googletagmanager.com",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https://*.tile.openstreetmap.org",
-      "connect-src 'self'",
+      "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com",
       "font-src 'self' data:",
       "object-src 'none'",
       "base-uri 'self'",

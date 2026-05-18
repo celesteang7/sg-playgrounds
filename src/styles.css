@@ -555,7 +555,8 @@ button {
   text-transform: uppercase;
 }
 
-.location-notice {
+.location-notice,
+.filter-context-notice {
   padding: 10px 12px;
   color: #405049;
   background: rgba(255, 255, 255, 0.93);
@@ -566,6 +567,12 @@ button {
   font-weight: 800;
   line-height: 1.35;
   backdrop-filter: blur(18px);
+}
+
+.filter-context-notice {
+  color: #16493f;
+  background: rgba(240, 253, 246, 0.94);
+  border-color: rgba(24, 191, 115, 0.28);
 }
 
 .station-marker {

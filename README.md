@@ -2,6 +2,8 @@
 
 Mobile-first Singapore EV charger map.
 
+Product planning notes live in [docs/todo.md](docs/todo.md).
+
 ## Data Source And Refresh Cadence
 
 The production data source is LTA DataMall's EV Charging Points Batch API:

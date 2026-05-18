@@ -315,6 +315,8 @@ function ChargerMapPage({ onNavigate }) {
   ]);
 
   useEffect(() => {
+    if (stations.length === 0) return;
+
     setSelectedFilters((current) => {
       const availableAreaIds = new Set(areaFilters.map((item) => item.areaId));
       const availableOperatorIds = new Set(operatorFilters.map((item) => item.id));
@@ -329,7 +331,7 @@ function ChargerMapPage({ onNavigate }) {
         operators: nextOperators,
       };
     });
-  }, [areaFilters, operatorFilters]);
+  }, [areaFilters, operatorFilters, stations.length]);
 
   useEffect(() => {
     setLocationNotice("");
@@ -539,6 +541,9 @@ function ChargerMapPage({ onNavigate }) {
         ? placeSearchWarning
         : "";
   const topNotice = locationNotice || searchNotice;
+  const filterContextNotice = isDefaultCentralAvailabilityFilter(selectedFilters)
+    ? "Showing only Central chargers that are available now. Central and Available now are selected; select more areas or clear filters to see more."
+    : "";
 
   function clearFilters() {
     setSelectedFilters(createAllFilterState());
@@ -671,6 +676,7 @@ function ChargerMapPage({ onNavigate }) {
           </div>
 
           {topNotice ? <div className="location-notice">{topNotice}</div> : null}
+          {filterContextNotice ? <div className="filter-context-notice">{filterContextNotice}</div> : null}
         </div>
 
         <MapContainer
@@ -1283,7 +1289,7 @@ function createDefaultFilterState() {
   return {
     availableOnly: true,
     fastOnly: false,
-    areas: [],
+    areas: ["central"],
     operators: [],
   };
 }
@@ -1299,6 +1305,16 @@ function createAllFilterState() {
 
 function hasActiveFilters(filters) {
   return Boolean(filters.availableOnly || filters.fastOnly || filters.areas.length > 0 || filters.operators.length > 0);
+}
+
+function isDefaultCentralAvailabilityFilter(filters) {
+  return (
+    filters.availableOnly &&
+    !filters.fastOnly &&
+    filters.areas.length === 1 &&
+    filters.areas[0] === "central" &&
+    filters.operators.length === 0
+  );
 }
 
 function stationPassesFilters(station, selectedFilters, activeAreaIds, activeOperatorIds) {
