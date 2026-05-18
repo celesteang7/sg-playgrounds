@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { normalizeChargerStations } from "./lib/chargers.js";
+import { trackPageView } from "./lib/analytics.js";
 import { PLACE_SEARCH_RADIUS_METERS, buildSearchQuery, rankStationSearchMatches } from "./lib/search.js";
 import { canOpenProviderApp, getProviderAppTarget, getProviderProfile, openProviderApp } from "./data/providerApps.js";
 
@@ -70,6 +71,10 @@ export default function App() {
     window.history.pushState(null, "", nextPath);
     setPath(nextPath);
   }
+
+  useEffect(() => {
+    trackPageView(path);
+  }, [path]);
 
   if (path === "/data") {
     return <DataInfoPage onNavigate={navigate} />;

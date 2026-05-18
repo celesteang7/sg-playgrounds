@@ -72,6 +72,16 @@ The key is read by [server/index.mjs](server/index.mjs) and sent to LTA using th
 The server also restricts LTA batch downloads to the current DataMall S3 host and applies a fetch timeout so public
 requests cannot leave backend fetches hanging indefinitely.
 
+## Analytics
+
+Basic Google Analytics tracking is optional. Create a GA4 web data stream, copy its measurement ID, and expose it to the Vite build:
+
+```bash
+VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+```
+
+When this variable is set, the client loads Google's `gtag.js` script and records page views for the map and `/data` route. When it is blank, analytics is disabled and no Google Analytics script is loaded.
+
 ## Run Locally
 
 ```bash
