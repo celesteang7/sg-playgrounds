@@ -85,7 +85,9 @@ button {
   max-width: 676px;
 }
 
-.brand-row {
+.brand-row,
+.search-box,
+.filter-scroller {
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(190, 216, 206, 0.96);
   box-shadow: var(--shadow-tight);
@@ -150,7 +152,14 @@ button {
 }
 
 .brand-row .brand-tagline {
-  display: none;
+  max-width: 360px;
+  overflow: hidden;
+  color: #8a988f;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .brand-row .brand-status {
@@ -303,14 +312,6 @@ button {
   text-decoration: none;
 }
 
-.sheet-search-area {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
 .search-box {
   display: grid;
   grid-template-columns: 20px 1fr 28px;
@@ -319,8 +320,6 @@ button {
   padding: 0 10px 0 13px;
   border-radius: 8px;
   color: #49635b;
-  background: #f4faf7;
-  border: 1px solid var(--border);
   outline: 2px solid transparent;
   outline-offset: 2px;
 }
@@ -370,8 +369,6 @@ button {
   overflow-x: auto;
   border-radius: 8px;
   scrollbar-width: none;
-  background: #f4faf7;
-  border: 1px solid var(--border);
 }
 
 .filter-scroller::-webkit-scrollbar {
@@ -569,12 +566,14 @@ button {
 .filter-context-notice {
   padding: 10px 12px;
   color: #405049;
-  background: #f4faf7;
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.93);
+  border: 1px solid rgba(190, 216, 206, 0.96);
   border-radius: 8px;
+  box-shadow: var(--shadow-tight);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.35;
+  backdrop-filter: blur(18px);
 }
 
 .filter-context-notice {
@@ -1316,6 +1315,7 @@ button {
 
 .station-list-footer {
   display: flex;
+  flex: 0 0 auto;
   justify-content: center;
   padding: 10px 0 2px;
 }
@@ -1630,13 +1630,7 @@ button {
   }
 
   .bottom-sheet.sheet-collapsed {
-    height: max(100px, calc(92px + env(safe-area-inset-bottom)));
-  }
-
-  .bottom-sheet.sheet-collapsed .sheet-search-area .filter-scroller,
-  .bottom-sheet.sheet-collapsed .location-notice,
-  .bottom-sheet.sheet-collapsed .filter-context-notice {
-    display: none;
+    height: max(122px, calc(108px + env(safe-area-inset-bottom)));
   }
 
   .sheet-handle {

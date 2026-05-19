@@ -589,7 +589,7 @@ function ChargerMapPage({ onNavigate }) {
                   {feed.loading ? "Syncing" : "Live map"}
                 </span>
               </div>
-              <p className="brand-tagline">Live Singapore EV charger data, refreshed every 5 min with availability and plug details.</p>
+              <p className="brand-tagline">Singapore EV chargers, refreshed every 5 min.</p>
               <p className="brand-status">
                 {feed.loading
                   ? "Loading Singapore chargers"
@@ -617,67 +617,7 @@ function ChargerMapPage({ onNavigate }) {
               </button>
             </div>
           </div>
-        </div>
 
-        <MapContainer
-          center={SINGAPORE_CENTER}
-          zoom={DEFAULT_ZOOM}
-          minZoom={10}
-          maxZoom={18}
-          zoomControl={false}
-          scrollWheelZoom
-          className="charger-map"
-        >
-          <MapBridge mapRef={mapRef} onCenterChange={handleMapCenterChange} />
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {filteredStations.map((station) => (
-            <Marker
-              key={station.id}
-              position={[station.latitude, station.longitude]}
-              icon={createStationIcon(station, station.id === selectedStation?.id)}
-              eventHandlers={{
-                click: () => selectStation(station),
-              }}
-            >
-              <Popup>
-                <strong>{station.name}</strong>
-                <span>{station.providerLabel || station.provider}</span>
-              </Popup>
-            </Marker>
-          ))}
-          {userLocation ? (
-            <Marker position={userLocation} icon={createUserIcon()}>
-              <Popup>Your location</Popup>
-            </Marker>
-          ) : null}
-          {searchPlace ? (
-            <Marker position={[searchPlace.latitude, searchPlace.longitude]} icon={createSearchPlaceIcon()}>
-              <Popup>{searchPlace.label}</Popup>
-            </Marker>
-          ) : null}
-        </MapContainer>
-      </section>
-
-      <section className={`bottom-sheet sheet-${sheetMode}`} aria-label="Charger details and results">
-        <button
-          className="sheet-handle"
-          type="button"
-          onClick={toggleSheetMode}
-          onPointerDown={handleSheetPointerDown}
-          onPointerUp={handleSheetPointerUp}
-          onPointerCancel={handleSheetPointerCancel}
-          onMouseDown={handleSheetMouseDown}
-          aria-expanded={sheetMode === "expanded"}
-          aria-label={sheetMode === "expanded" ? "Collapse charger details" : "Expand charger details"}
-        >
-          <span className="sheet-handle-bar" aria-hidden="true" />
-          {sheetMode === "collapsed" ? <ChevronsUp className="sheet-swipe-cue" size={18} aria-hidden="true" /> : null}
-        </button>
-
-        <div className="sheet-search-area">
           <label className="search-box">
             <Search size={18} aria-hidden="true" />
             <input
@@ -749,6 +689,64 @@ function ChargerMapPage({ onNavigate }) {
           ) : null}
         </div>
 
+        <MapContainer
+          center={SINGAPORE_CENTER}
+          zoom={DEFAULT_ZOOM}
+          minZoom={10}
+          maxZoom={18}
+          zoomControl={false}
+          scrollWheelZoom
+          className="charger-map"
+        >
+          <MapBridge mapRef={mapRef} onCenterChange={handleMapCenterChange} />
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {filteredStations.map((station) => (
+            <Marker
+              key={station.id}
+              position={[station.latitude, station.longitude]}
+              icon={createStationIcon(station, station.id === selectedStation?.id)}
+              eventHandlers={{
+                click: () => selectStation(station),
+              }}
+            >
+              <Popup>
+                <strong>{station.name}</strong>
+                <span>{station.providerLabel || station.provider}</span>
+              </Popup>
+            </Marker>
+          ))}
+          {userLocation ? (
+            <Marker position={userLocation} icon={createUserIcon()}>
+              <Popup>Your location</Popup>
+            </Marker>
+          ) : null}
+          {searchPlace ? (
+            <Marker position={[searchPlace.latitude, searchPlace.longitude]} icon={createSearchPlaceIcon()}>
+              <Popup>{searchPlace.label}</Popup>
+            </Marker>
+          ) : null}
+        </MapContainer>
+      </section>
+
+      <section className={`bottom-sheet sheet-${sheetMode}`} aria-label="Charger details and results">
+        <button
+          className="sheet-handle"
+          type="button"
+          onClick={toggleSheetMode}
+          onPointerDown={handleSheetPointerDown}
+          onPointerUp={handleSheetPointerUp}
+          onPointerCancel={handleSheetPointerCancel}
+          onMouseDown={handleSheetMouseDown}
+          aria-expanded={sheetMode === "expanded"}
+          aria-label={sheetMode === "expanded" ? "Collapse charger details" : "Expand charger details"}
+        >
+          <span className="sheet-handle-bar" aria-hidden="true" />
+          {sheetMode === "collapsed" ? <ChevronsUp className="sheet-swipe-cue" size={18} aria-hidden="true" /> : null}
+        </button>
+
         <div className="sheet-content">
           <div className="panel-kicker">
             <span>
@@ -816,18 +814,19 @@ function ChargerMapPage({ onNavigate }) {
               );
             })}
 
-            {hasMoreResults ? (
-              <div className="station-list-footer">
-                <button
-                  type="button"
-                  className="show-more-button"
-                  onClick={() => setVisibleResultCount((count) => count + RESULT_PAGE_SIZE)}
-                >
-                  Show more
-                </button>
-              </div>
-            ) : null}
           </div>
+
+          {hasMoreResults ? (
+            <div className="station-list-footer">
+              <button
+                type="button"
+                className="show-more-button"
+                onClick={() => setVisibleResultCount((count) => count + RESULT_PAGE_SIZE)}
+              >
+                Show more
+              </button>
+            </div>
+          ) : null}
         </div>
       </section>
     </main>
