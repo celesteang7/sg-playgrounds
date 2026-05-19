@@ -21,6 +21,7 @@ const oneMapBaseUrl = process.env.ONEMAP_BASE_URL || "https://www.onemap.gov.sg"
 const oneMapApiToken = process.env.ONEMAP_API_TOKEN || "";
 const oneMapEmail = process.env.ONEMAP_EMAIL || "";
 const oneMapPassword = process.env.ONEMAP_PASSWORD || "";
+const gaMeasurementId = normalizePublicEnvValue(process.env.GA_MEASUREMENT_ID || process.env.VITE_GA_MEASUREMENT_ID);
 const configuredOneMapCacheTtlMs = Number(process.env.ONEMAP_CACHE_TTL_MS || 30 * 24 * 60 * 60 * 1000);
 const oneMapSearchCacheTtlMs =
   Number.isFinite(configuredOneMapCacheTtlMs) && configuredOneMapCacheTtlMs > 0
@@ -66,6 +67,15 @@ app.get("/api/health", (_req, res) => {
     ok: true,
     ltaConfigured: Boolean(ltaAccountKey),
     cache: liveCache ? buildCacheMeta(liveCache.fetchedAtMs) : null,
+  });
+});
+
+app.get("/api/config", (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  res.json({
+    analytics: {
+      gaMeasurementId,
+    },
   });
 });
 
@@ -419,6 +429,10 @@ function normalizeLtaTimestamp(value) {
   const date = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}+08:00`);
 
   return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function normalizePublicEnvValue(value) {
+  return String(value || "").trim();
 }
 
 function getCurrentRefreshSlotMs(nowMs = Date.now()) {
