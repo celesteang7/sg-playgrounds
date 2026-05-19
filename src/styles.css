@@ -96,19 +96,19 @@ button {
 
 .brand-row {
   display: grid;
-  grid-template-columns: 58px minmax(0, 1fr) auto;
+  grid-template-columns: 46px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
-  min-height: 74px;
-  padding: 8px 10px 8px 8px;
+  gap: 10px;
+  min-height: 60px;
+  padding: 6px 10px 6px 6px;
   border-radius: 8px;
 }
 
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   overflow: hidden;
   color: var(--ink);
   background: var(--surface-warm);
@@ -119,8 +119,8 @@ button {
 
 .brand-mark img {
   display: block;
-  width: 54px;
-  height: 54px;
+  width: 42px;
+  height: 42px;
   object-fit: contain;
 }
 
@@ -138,25 +138,21 @@ button {
 .brand-row h1 {
   margin: 0;
   color: var(--ink);
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1.05;
   letter-spacing: 0;
 }
 
 .brand-row p {
-  margin: 5px 0 0;
+  margin: 3px 0 0;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1.2;
 }
 
 .brand-row .brand-tagline {
-  max-width: 410px;
-  color: #738178;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1.25;
+  display: none;
 }
 
 .brand-row .brand-status {
@@ -1498,27 +1494,27 @@ button {
   }
 
   .brand-row {
-    grid-template-columns: 50px minmax(0, 1fr) auto;
-    min-height: 64px;
-    gap: 10px;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    min-height: 54px;
+    gap: 8px;
   }
 
   .brand-mark {
-    width: 50px;
-    height: 50px;
+    width: 42px;
+    height: 42px;
   }
 
   .brand-mark img {
-    width: 47px;
-    height: 47px;
+    width: 38px;
+    height: 38px;
   }
 
   .brand-row h1 {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .brand-row p {
-    font-size: 12px;
+    font-size: 11px;
   }
 
   .live-pill {
@@ -1768,22 +1764,22 @@ button {
   }
 
   .brand-row {
-    grid-template-columns: 46px minmax(0, 1fr) auto;
-    gap: 8px;
+    grid-template-columns: 38px minmax(0, 1fr) auto;
+    gap: 7px;
   }
 
   .brand-mark {
-    width: 46px;
-    height: 46px;
+    width: 38px;
+    height: 38px;
   }
 
   .brand-mark img {
-    width: 43px;
-    height: 43px;
+    width: 34px;
+    height: 34px;
   }
 
   .brand-row p {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   .live-pill {
