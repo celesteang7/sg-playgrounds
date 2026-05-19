@@ -542,8 +542,11 @@ function ChargerMapPage({ onNavigate }) {
         : "";
   const topNotice = locationNotice || searchNotice;
   const filterContextNotice = isDefaultCentralAvailabilityFilter(selectedFilters)
-    ? "Showing only Central chargers that are available now. Central and Available now are selected; select more areas or clear filters to see more."
+    ? "Central + available filters are on. Add areas or clear filters to see more."
     : "";
+
+  const [filterNoticeDismissed, setFilterNoticeDismissed] = useState(false);
+  useEffect(() => { setFilterNoticeDismissed(false); }, [filterContextNotice]);
 
   function clearFilters() {
     setSelectedFilters(createAllFilterState());
@@ -586,7 +589,7 @@ function ChargerMapPage({ onNavigate }) {
                   {feed.loading ? "Syncing" : "Live map"}
                 </span>
               </div>
-              <p className="brand-tagline">Live Singapore EV charger data, refreshed every 5 min with availability and plug details.</p>
+              <p className="brand-tagline">Singapore EV chargers, refreshed every 5 min.</p>
               <p className="brand-status">
                 {feed.loading
                   ? "Loading Singapore chargers"
@@ -676,7 +679,14 @@ function ChargerMapPage({ onNavigate }) {
           </div>
 
           {topNotice ? <div className="location-notice">{topNotice}</div> : null}
-          {filterContextNotice ? <div className="filter-context-notice">{filterContextNotice}</div> : null}
+          {filterContextNotice && !filterNoticeDismissed ? (
+            <div className="filter-context-notice">
+              {filterContextNotice}
+              <button type="button" className="notice-dismiss" onClick={() => setFilterNoticeDismissed(true)} aria-label="Dismiss">
+                <X size={14} />
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <MapContainer
@@ -803,6 +813,7 @@ function ChargerMapPage({ onNavigate }) {
                 </button>
               );
             })}
+
           </div>
 
           {hasMoreResults ? (
