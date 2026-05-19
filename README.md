@@ -76,13 +76,15 @@ requests cannot leave backend fetches hanging indefinitely.
 
 ## Analytics
 
-Basic Google Analytics tracking is optional. Create a GA4 web data stream, copy its measurement ID, and expose it to the Vite build:
+Basic Google Analytics tracking is optional. Create a GA4 web data stream, copy its measurement ID, and expose it to the server runtime:
 
 ```bash
-VITE_GA_MEASUREMENT_ID=G-XXXXXXXXXX
+GA_MEASUREMENT_ID=G-XXXXXXXXXX
 ```
 
-When this variable is set, the client loads Google's `gtag.js` script and records page views for the map and `/data` route. When it is blank, analytics is disabled and no Google Analytics script is loaded.
+The server returns only this public measurement ID from `GET /api/config`, so production hosts such as Railway can update it without relying on Vite build-time env injection. `VITE_GA_MEASUREMENT_ID` is still supported for local static builds.
+
+When a measurement ID is set, the client loads Google's `gtag.js` script and records page views for the map and `/data` route. When it is blank, analytics is disabled and no Google Analytics script is loaded.
 
 ## Run Locally
 

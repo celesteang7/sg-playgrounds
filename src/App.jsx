@@ -100,6 +100,7 @@ function ChargerMapPage({ onNavigate }) {
     cache: null,
   });
   const [userLocation, setUserLocation] = useState(null);
+  const [userLocationAccuracy, setUserLocationAccuracy] = useState(null);
   const [isLocating, setIsLocating] = useState(false);
   const [mapCenter, setMapCenter] = useState(SINGAPORE_CENTER);
   const [visibleResultCount, setVisibleResultCount] = useState(RESULT_PAGE_SIZE);
@@ -109,6 +110,8 @@ function ChargerMapPage({ onNavigate }) {
   const mapRef = useRef(null);
   const sheetDragStartY = useRef(null);
   const sheetDidDrag = useRef(false);
+  const locationWatchId = useRef(null);
+  const filteredStationsRef = useRef([]);
   const areaFilters = useMemo(() => buildAreaFilterOptions(stations), [stations]);
   const operatorFilters = useMemo(() => buildOperatorFilterOptions(stations), [stations]);
   const activeAreaIds = useMemo(() => new Set(selectedFilters.areas), [selectedFilters.areas]);
@@ -207,6 +210,8 @@ function ChargerMapPage({ onNavigate }) {
     return () => mediaQuery.removeEventListener("change", syncMobileDefaultSheet);
   }, [sheetHasUserInteracted]);
 
+  useEffect(() => () => stopLocationWatch(), []);
+
   const searchQuery = useMemo(() => buildSearchQuery(query), [query]);
   const textSearchMatches = useMemo(() => rankStationSearchMatches(stations, searchQuery), [stations, searchQuery]);
   const textSearchScoreById = useMemo(
@@ -230,6 +235,11 @@ function ChargerMapPage({ onNavigate }) {
       ),
     [activeAreaIds, activeOperatorIds, searchCandidates, selectedFilters],
   );
+
+  useEffect(() => {
+    filteredStationsRef.current = filteredStations;
+  }, [filteredStations]);
+
   const hiddenSearchMatchCount = searchQuery.active ? Math.max(0, searchCandidates.length - filteredStations.length) : 0;
   const rankingOrigin = searchOrigin || userLocation || mapCenter;
   const rankedStations = useMemo(
@@ -399,52 +409,76 @@ function ChargerMapPage({ onNavigate }) {
       return;
     }
 
+    stopLocationWatch();
     setIsLocating(true);
     setLocationNotice("Finding your precise location...");
+    let hasInitialLocation = false;
 
-    navigator.geolocation.getCurrentPosition(
+    locationWatchId.current = navigator.geolocation.watchPosition(
       (position) => {
-        const nextLocation = [position.coords.latitude, position.coords.longitude];
-        const locationAccuracyLabel = formatAccuracyMeters(position.coords.accuracy);
-        setUserLocation(nextLocation);
-
-        if (filteredStations.length === 0) {
-          setLocationNotice("No visible chargers match the current filters.");
-          mapRef.current?.flyTo(nextLocation, 16, { duration: 0.45 });
-          setIsLocating(false);
-          return;
-        }
-
-        const nearestStation = rankStationsByDistance(nextLocation, filteredStations)[0]?.station;
-
-        if (!nearestStation) {
-          setLocationNotice("No visible chargers match the current filters.");
-          setIsLocating(false);
-          return;
-        }
-
-        setSelectionMode("auto");
-        setSelectedId(nearestStation.id);
-        setVisibleResultCount(RESULT_PAGE_SIZE);
-        setSheetHasUserInteracted(true);
-        setSheetMode("expanded");
+        handleUserPosition(position, { focusNearest: !hasInitialLocation });
+        hasInitialLocation = true;
+        setIsLocating(false);
+      },
+      (error) => {
+        if (!hasInitialLocation) stopLocationWatch();
         setLocationNotice(
-          [
-            "Selected the closest charger in the current filtered list.",
-            locationAccuracyLabel ? `Location accuracy: ${locationAccuracyLabel}.` : "",
-          ]
-            .filter(Boolean)
-            .join(" "),
+          hasInitialLocation
+            ? "Location tracking paused. Showing your last known position."
+            : getLocationErrorMessage(error),
         );
-        zoomToLocationAndStation(mapRef.current, nextLocation, nearestStation);
         setIsLocating(false);
       },
-      () => {
-        setLocationNotice("Location unavailable. Enable browser location to find the nearest charger.");
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 12000 },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 },
     );
+  }
+
+  function handleUserPosition(position, { focusNearest }) {
+    const nextLocation = [position.coords.latitude, position.coords.longitude];
+    const locationAccuracyLabel = formatAccuracyMeters(position.coords.accuracy);
+    const currentFilteredStations = filteredStationsRef.current;
+
+    setUserLocation((current) => (current && isSameMapCenter(current, nextLocation) ? current : nextLocation));
+    setUserLocationAccuracy(position.coords.accuracy);
+
+    if (currentFilteredStations.length === 0) {
+      if (focusNearest) {
+        setLocationNotice("No visible chargers match the current filters.");
+        mapRef.current?.flyTo(nextLocation, 16, { duration: 0.45 });
+      }
+      return;
+    }
+
+    const nearestStation = rankStationsByDistance(nextLocation, currentFilteredStations)[0]?.station;
+
+    if (!nearestStation) {
+      if (focusNearest) setLocationNotice("No visible chargers match the current filters.");
+      return;
+    }
+
+    if (!focusNearest) return;
+
+    setSelectionMode("auto");
+    setSelectedId(nearestStation.id);
+    setVisibleResultCount(RESULT_PAGE_SIZE);
+    setSheetHasUserInteracted(true);
+    setSheetMode("expanded");
+    setLocationNotice(
+      [
+        "Tracking your location and selected the closest charger in the current filtered list.",
+        locationAccuracyLabel ? `Accuracy: ${locationAccuracyLabel}.` : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+    zoomToLocationAndStation(mapRef.current, nextLocation, nearestStation);
+  }
+
+  function stopLocationWatch() {
+    if (locationWatchId.current == null || !navigator.geolocation?.clearWatch) return;
+
+    navigator.geolocation.clearWatch(locationWatchId.current);
+    locationWatchId.current = null;
   }
 
   function handleSheetPointerDown(event) {
@@ -719,8 +753,11 @@ function ChargerMapPage({ onNavigate }) {
             </Marker>
           ))}
           {userLocation ? (
-            <Marker position={userLocation} icon={createUserIcon()}>
-              <Popup>Your location</Popup>
+            <Marker position={userLocation} icon={createUserIcon()} zIndexOffset={1000}>
+              <Popup>
+                <strong>Your location</strong>
+                {formatAccuracyMeters(userLocationAccuracy) ? <span>Accuracy {formatAccuracyMeters(userLocationAccuracy)}</span> : null}
+              </Popup>
             </Marker>
           ) : null}
           {searchPlace ? (
@@ -1683,6 +1720,13 @@ function formatAccuracyMeters(accuracyMeters) {
   if (accuracyMeters < 1000) return `+/- ${Math.round(accuracyMeters)} m`;
 
   return `+/- ${(accuracyMeters / 1000).toFixed(1)} km`;
+}
+
+function getLocationErrorMessage(error) {
+  if (error?.code === 1) return "Location permission is blocked. Enable browser location to find the nearest charger.";
+  if (error?.code === 3) return "Location timed out. Try again or check that precise location is enabled.";
+
+  return "Location unavailable. Enable browser location to find the nearest charger.";
 }
 
 function isSameMapCenter(current, next) {
