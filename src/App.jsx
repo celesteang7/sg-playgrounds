@@ -33,11 +33,11 @@ const SHEET_DRAG_THRESHOLD_PX = 44;
 const MOBILE_SHEET_QUERY = "(max-width: 860px)";
 const RESULT_PAGE_SIZE = 10;
 const AREA_FILTERS = [
+  { id: "central", label: "Central", color: "#08a7d8", textColor: "#06283a" },
   { id: "north", label: "North", color: "#17875a", textColor: "#ffffff" },
   { id: "south", label: "South", color: "#0f4c81", textColor: "#ffffff" },
   { id: "east", label: "East", color: "#f97316", textColor: "#17201c" },
   { id: "west", label: "West", color: "#7c3aed", textColor: "#ffffff" },
-  { id: "central", label: "Central", color: "#08a7d8", textColor: "#06283a" },
 ];
 const ALL_FILTER = { id: "all", label: "All", Icon: CircleDot, color: "#08283f", textColor: "#ffffff" };
 const QUICK_FILTERS = [
