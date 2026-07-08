@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-05T04:30:54.471Z",
+  "generatedAt": "2026-07-08T03:45:26.445Z",
   "count": 172,
   "dataQuality": "Best-effort public playground map from official data.gov.sg datasets. NParks point coordinates are indicative. Area values describe the managed-area or park polygon where available, not the exact play-equipment footprint.",
   "sources": [
@@ -565,8 +565,8 @@
       "type": "Dedicated playground",
       "latitude": 1.3604790873723065,
       "longitude": 103.86598964615847,
-      "areaSqm": 3663.428465755,
-      "areaLabel": "3,663 sqm",
+      "areaSqm": 3685.53148345,
+      "areaLabel": "3,686 sqm",
       "areaCategory": "Neighbourhood",
       "address": "",
       "amenities": [],
